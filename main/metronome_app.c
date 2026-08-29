@@ -1,0 +1,318 @@
+#include "metronome_app.h"
+
+#include <math.h>
+#include <string.h>
+
+#include "board_pins.h"
+#include "driver/i2s_std.h"
+#include "esp_log.h"
+#include "freertos/semphr.h"
+#include "freertos/task.h"
+#include "metronome_core.h"
+
+#define AUDIO_FRAMES_PER_BLOCK 128
+#define MAX_SUBSCRIBERS 4
+#define COMMAND_QUEUE_LENGTH 32
+
+typedef enum {
+    COMMAND_SET_BPM,
+    COMMAND_ADJUST_BPM,
+    COMMAND_SET_RUNNING,
+    COMMAND_TOGGLE,
+} command_type_t;
+
+typedef struct {
+    command_type_t type;
+    int value;
+} metronome_command_t;
+
+typedef struct {
+    float phase;
+    float phase_step;
+    float gain;
+    uint32_t samples_left;
+    uint32_t total_samples;
+} click_voice_t;
+
+static const char *TAG = "metronome";
+static QueueHandle_t s_command_queue;
+static SemaphoreHandle_t s_state_mutex;
+static QueueHandle_t s_subscribers[MAX_SUBSCRIBERS];
+static size_t s_subscriber_count;
+static metronome_state_t s_state = {
+    .bpm = METRONOME_DEFAULT_BPM,
+    .running = false,
+    .accent = true,
+};
+static i2s_chan_handle_t s_i2s_tx;
+
+static int clamp_bpm(int bpm)
+{
+    if (bpm < METRONOME_MIN_BPM) {
+        return METRONOME_MIN_BPM;
+    }
+    if (bpm > METRONOME_MAX_BPM) {
+        return METRONOME_MAX_BPM;
+    }
+    return bpm;
+}
+
+static metronome_state_t snapshot_from_core(const metronome_core_t *core,
+                                             bool accent)
+{
+    return (metronome_state_t) {
+        .bpm = core->bpm,
+        .running = core->running,
+        .accent = accent,
+        .beat_index = core->last_beat_index,
+        .ppqn_tick = core->ppqn_tick,
+        .ui_position = core->ui_position,
+        .led_position = core->led_position,
+    };
+}
+
+static void publish_state(metronome_state_t state)
+{
+    QueueHandle_t subscribers[MAX_SUBSCRIBERS];
+    size_t count = 0;
+
+    if (xSemaphoreTake(s_state_mutex, portMAX_DELAY) == pdTRUE) {
+        s_state = state;
+        count = s_subscriber_count;
+        memcpy(subscribers, s_subscribers, count * sizeof(subscribers[0]));
+        xSemaphoreGive(s_state_mutex);
+    }
+
+    for (size_t i = 0; i < count; ++i) {
+        xQueueOverwrite(subscribers[i], &state);
+    }
+}
+
+static void start_click(click_voice_t *voice, bool accent)
+{
+    const float frequency_hz = accent ? 1760.0f : 1120.0f;
+    const float duration_ms = accent ? 28.0f : 20.0f;
+    voice->phase = 0.0f;
+    voice->phase_step = 2.0f * (float)M_PI * frequency_hz /
+                        (float)METRONOME_SAMPLE_RATE_HZ;
+    voice->gain = accent ? 0.34f : 0.22f;
+    voice->total_samples = (uint32_t)(duration_ms *
+                           (float)METRONOME_SAMPLE_RATE_HZ / 1000.0f);
+    voice->samples_left = voice->total_samples;
+}
+
+static int16_t render_click_sample(click_voice_t *voice)
+{
+    if (voice->samples_left == 0 || voice->total_samples == 0) {
+        return 0;
+    }
+
+    const float envelope = (float)voice->samples_left /
+                           (float)voice->total_samples;
+    const float sample = sinf(voice->phase) * voice->gain * envelope * envelope;
+    voice->phase += voice->phase_step;
+    if (voice->phase >= 2.0f * (float)M_PI) {
+        voice->phase -= 2.0f * (float)M_PI;
+    }
+    voice->samples_left--;
+    return (int16_t)(sample * 32767.0f);
+}
+
+static bool apply_command(metronome_core_t *core,
+                          click_voice_t *voice,
+                          const metronome_command_t *command)
+{
+    const uint16_t previous_bpm = core->bpm;
+    const bool previous_running = core->running;
+
+    switch (command->type) {
+    case COMMAND_SET_BPM:
+        metronome_core_set_bpm(core, (uint16_t)clamp_bpm(command->value));
+        break;
+    case COMMAND_ADJUST_BPM:
+        metronome_core_set_bpm(core,
+            (uint16_t)clamp_bpm((int)core->bpm + command->value));
+        break;
+    case COMMAND_SET_RUNNING:
+        metronome_core_set_running(core, command->value != 0);
+        break;
+    case COMMAND_TOGGLE:
+        metronome_core_set_running(core, !core->running);
+        break;
+    }
+
+    if (!core->running) {
+        memset(voice, 0, sizeof(*voice));
+    }
+    return previous_bpm != core->bpm || previous_running != core->running;
+}
+
+static void audio_task(void *arg)
+{
+    (void)arg;
+    int16_t samples[AUDIO_FRAMES_PER_BLOCK * 2];
+    metronome_core_t core;
+    click_voice_t click = {0};
+
+    metronome_core_init(&core, METRONOME_SAMPLE_RATE_HZ,
+                        METRONOME_PPQN, METRONOME_DEFAULT_BPM);
+    publish_state(snapshot_from_core(&core, true));
+
+    while (true) {
+        metronome_command_t command;
+        while (xQueueReceive(s_command_queue, &command, 0) == pdTRUE) {
+            if (apply_command(&core, &click, &command)) {
+                publish_state(snapshot_from_core(
+                    &core, (core.last_beat_index % 4U) == 0U));
+            }
+        }
+
+        bool block_has_beat = false;
+        bool block_accent = false;
+        for (size_t frame = 0; frame < AUDIO_FRAMES_PER_BLOCK; ++frame) {
+            metronome_core_event_t event;
+            metronome_core_step(&core, &event);
+            if (event.beat) {
+                start_click(&click, event.accent);
+                block_has_beat = true;
+                block_accent = event.accent;
+            }
+
+            const int16_t sample = core.running ? render_click_sample(&click) : 0;
+            samples[frame * 2] = sample;
+            samples[frame * 2 + 1] = sample;
+        }
+
+        size_t bytes_written = 0;
+        esp_err_t err = i2s_channel_write(s_i2s_tx, samples, sizeof(samples),
+                                          &bytes_written, portMAX_DELAY);
+        if (err != ESP_OK || bytes_written != sizeof(samples)) {
+            ESP_LOGE(TAG, "I2S write failed: %s (%u/%u bytes)",
+                     esp_err_to_name(err), (unsigned)bytes_written,
+                     (unsigned)sizeof(samples));
+        }
+
+        if (block_has_beat) {
+            publish_state(snapshot_from_core(&core, block_accent));
+        }
+    }
+}
+
+esp_err_t metronome_app_start(void)
+{
+    s_command_queue = xQueueCreate(COMMAND_QUEUE_LENGTH,
+                                   sizeof(metronome_command_t));
+    s_state_mutex = xSemaphoreCreateMutex();
+    if (s_command_queue == NULL || s_state_mutex == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    i2s_chan_config_t channel_config =
+        I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
+    channel_config.dma_desc_num = 4;
+    channel_config.dma_frame_num = AUDIO_FRAMES_PER_BLOCK;
+
+    esp_err_t err = i2s_new_channel(&channel_config, &s_i2s_tx, NULL);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    i2s_std_config_t standard_config = {
+        .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(METRONOME_SAMPLE_RATE_HZ),
+        .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(
+            I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
+        .gpio_cfg = {
+            .mclk = I2S_GPIO_UNUSED,
+            .bclk = PIN_SPEAKER_BCLK,
+            .ws = PIN_SPEAKER_WS,
+            .dout = PIN_SPEAKER_DATA_OUT,
+            .din = I2S_GPIO_UNUSED,
+            .invert_flags = {
+                .mclk_inv = false,
+                .bclk_inv = false,
+                .ws_inv = false,
+            },
+        },
+    };
+
+    err = i2s_channel_init_std_mode(s_i2s_tx, &standard_config);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = i2s_channel_enable(s_i2s_tx);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    if (xTaskCreate(audio_task, "metronome_audio", 4096, NULL,
+                    configMAX_PRIORITIES - 3, NULL) != pdPASS) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    ESP_LOGI(TAG, "Continuous I2S started at %d Hz, %d PPQN, default %d BPM",
+             METRONOME_SAMPLE_RATE_HZ, METRONOME_PPQN, METRONOME_DEFAULT_BPM);
+    return ESP_OK;
+}
+
+esp_err_t metronome_app_subscribe(QueueHandle_t state_queue)
+{
+    if (state_queue == NULL || s_state_mutex == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    metronome_state_t state;
+    if (xSemaphoreTake(s_state_mutex, portMAX_DELAY) != pdTRUE) {
+        return ESP_FAIL;
+    }
+    if (s_subscriber_count >= MAX_SUBSCRIBERS) {
+        xSemaphoreGive(s_state_mutex);
+        return ESP_ERR_NO_MEM;
+    }
+    s_subscribers[s_subscriber_count++] = state_queue;
+    state = s_state;
+    xSemaphoreGive(s_state_mutex);
+    xQueueOverwrite(state_queue, &state);
+    return ESP_OK;
+}
+
+metronome_state_t metronome_app_get_state(void)
+{
+    metronome_state_t state = s_state;
+    if (s_state_mutex != NULL &&
+        xSemaphoreTake(s_state_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        state = s_state;
+        xSemaphoreGive(s_state_mutex);
+    }
+    return state;
+}
+
+static void send_command(command_type_t type, int value)
+{
+    if (s_command_queue == NULL) {
+        return;
+    }
+    const metronome_command_t command = {.type = type, .value = value};
+    if (xQueueSend(s_command_queue, &command, 0) != pdTRUE) {
+        ESP_LOGW(TAG, "Command queue full; command dropped");
+    }
+}
+
+void metronome_app_set_bpm(int bpm)
+{
+    send_command(COMMAND_SET_BPM, bpm);
+}
+
+void metronome_app_adjust_bpm(int delta)
+{
+    send_command(COMMAND_ADJUST_BPM, delta);
+}
+
+void metronome_app_set_running(bool running)
+{
+    send_command(COMMAND_SET_RUNNING, running ? 1 : 0);
+}
+
+void metronome_app_toggle(void)
+{
+    send_command(COMMAND_TOGGLE, 0);
+}

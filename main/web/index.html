@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b0d10">
+  <title>EasyInput 节拍器</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --paper: #eef1e8;
+      --muted: #899184;
+      --line: #2b312d;
+      --panel: #151917;
+      --accent: #ff6b35;
+      --cool: #4ecdc4;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      color: var(--paper);
+      background:
+        radial-gradient(circle at 75% 10%, rgba(78, 205, 196, .08), transparent 34%),
+        radial-gradient(circle at 15% 90%, rgba(255, 107, 53, .09), transparent 36%),
+        #0b0d10;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    main {
+      width: min(760px, 100%);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      padding: clamp(24px, 6vw, 56px);
+      background: rgba(21, 25, 23, .86);
+      box-shadow: 0 30px 90px rgba(0, 0, 0, .38);
+      backdrop-filter: blur(14px);
+    }
+
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 56px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--cool);
+      font-size: 12px;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font: 600 clamp(22px, 5vw, 38px)/1.1 system-ui, sans-serif;
+      letter-spacing: -.04em;
+    }
+
+    .connection {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 0;
+      padding: 8px 12px;
+      border: 1px solid #343b36;
+      border-radius: 999px;
+      color: var(--muted);
+      background: #101311;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #59605a;
+      box-shadow: 0 0 0 4px rgba(89, 96, 90, .12);
+    }
+
+    .connection.online .dot {
+      background: var(--cool);
+      box-shadow: 0 0 0 4px rgba(78, 205, 196, .12);
+    }
+
+    .connection.error .dot {
+      background: var(--accent);
+      box-shadow: 0 0 0 4px rgba(255, 107, 53, .12);
+    }
+
+    .tempo {
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 44px;
+    }
+
+    #bpmValue {
+      font: 700 clamp(82px, 22vw, 160px)/.8 system-ui, sans-serif;
+      letter-spacing: -.09em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .unit {
+      color: var(--muted);
+      font-size: 15px;
+      letter-spacing: .12em;
+    }
+
+    .beats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: clamp(8px, 2vw, 16px);
+      margin-bottom: 48px;
+    }
+
+    .beat {
+      aspect-ratio: 1;
+      border: 1px solid #343b36;
+      border-radius: 18px;
+      display: grid;
+      place-items: end start;
+      padding: 14px;
+      overflow: hidden;
+      color: #697069;
+      background: #101311;
+      transition: transform 80ms ease, border-color 80ms ease,
+                  background-color 80ms ease, color 80ms ease;
+    }
+
+    .beat::before {
+      content: "";
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 32px currentColor;
+    }
+
+    .beat.active {
+      transform: translateY(-7px);
+      color: var(--cool);
+      border-color: rgba(78, 205, 196, .6);
+      background: rgba(78, 205, 196, .1);
+    }
+
+    .beat.accent {
+      color: var(--accent);
+      border-color: rgba(255, 107, 53, .68);
+      background: rgba(255, 107, 53, .11);
+    }
+
+    .beat span {
+      justify-self: end;
+      align-self: start;
+      font-size: 12px;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 52px 1fr 52px;
+      gap: 12px;
+      align-items: center;
+    }
+
+    button {
+      min-height: 52px;
+      border: 1px solid #39403b;
+      border-radius: 14px;
+      color: var(--paper);
+      background: #101311;
+      font: inherit;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    button:hover { border-color: #677168; }
+    button:focus-visible { outline: 2px solid var(--cool); outline-offset: 3px; }
+    button:disabled { cursor: not-allowed; opacity: .42; }
+
+    #toggle {
+      border-color: var(--paper);
+      color: #0b0d10;
+      background: var(--paper);
+      font-weight: 700;
+      letter-spacing: .08em;
+    }
+
+    #toggle.running {
+      border-color: var(--accent);
+      color: #fff7f2;
+      background: var(--accent);
+    }
+
+    .hint {
+      margin: 28px 0 0;
+      color: var(--muted);
+      text-align: center;
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
+    @media (max-width: 540px) {
+      body { padding: 12px; }
+      main { border-radius: 22px; }
+      header { margin-bottom: 42px; }
+      .beats { margin-bottom: 36px; }
+      .beat { border-radius: 13px; padding: 10px; }
+      .connection span:last-child { display: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .beat { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="eyebrow">I2S · 96 PPQN</p>
+        <h1>EasyInput 节拍器</h1>
+      </div>
+      <button class="connection" id="connectDevice" type="button" aria-live="polite">
+        <span class="dot" aria-hidden="true"></span>
+        <span id="connectionText">连接设备</span>
+      </button>
+    </header>
+
+    <section aria-label="当前速度">
+      <div class="tempo">
+        <span id="bpmValue">120</span>
+        <span class="unit">BPM</span>
+      </div>
+
+      <div class="beats" aria-label="四拍往返显示">
+        <div class="beat active accent"><span>01</span></div>
+        <div class="beat"><span>02</span></div>
+        <div class="beat"><span>03</span></div>
+        <div class="beat"><span>04</span></div>
+      </div>
+    </section>
+
+    <section class="controls" aria-label="节拍器控制">
+      <button id="slower" type="button" aria-label="速度减一" disabled>−</button>
+      <button id="toggle" type="button" disabled>开始</button>
+      <button id="faster" type="button" aria-label="速度加一" disabled>＋</button>
+    </section>
+
+    <p class="hint">USB 连接只用于网页控制与显示<br>旋转/按下板上旋钮仍可独立调速、开始或停止</p>
+  </main>
+
+  <script>
+    const squares = [...document.querySelectorAll('.beat')];
+    const bpmValue = document.querySelector('#bpmValue');
+    const toggle = document.querySelector('#toggle');
+    const slower = document.querySelector('#slower');
+    const faster = document.querySelector('#faster');
+    const connectDevice = document.querySelector('#connectDevice');
+    const connectionText = document.querySelector('#connectionText');
+    let state = { bpm: 120, running: false, accent: true, uiPosition: 0, beat: 0 };
+    let serialPort = null;
+    let reader = null;
+    let writer = null;
+    let readLoopPromise = null;
+    let closing = false;
+    let lineBuffer = '';
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+
+    function render(next) {
+      state = { ...state, ...next };
+      bpmValue.textContent = state.bpm;
+      toggle.textContent = state.running ? '停止' : '开始';
+      toggle.classList.toggle('running', state.running);
+      toggle.setAttribute('aria-pressed', String(state.running));
+      squares.forEach((square, index) => {
+        const active = state.running && index === state.uiPosition;
+        square.classList.toggle('active', active);
+        square.classList.toggle('accent', active && state.accent);
+      });
+    }
+
+    function setConnection(status, label) {
+      connectDevice.classList.toggle('online', status === 'online');
+      connectDevice.classList.toggle('error', status === 'error');
+      connectionText.textContent = label;
+      const online = status === 'online';
+      slower.disabled = !online;
+      toggle.disabled = !online;
+      faster.disabled = !online;
+    }
+
+    function handleLine(line) {
+      if (!line.trim()) return;
+      try {
+        const message = JSON.parse(line);
+        if (message.type === 'state') render(message);
+        if (message.type === 'error') setConnection('error', message.message);
+      } catch (_) {
+        // Ignore boot logs and other non-protocol serial output.
+      }
+    }
+
+    function handleBytes(bytes) {
+      lineBuffer += decoder.decode(bytes, { stream: true });
+      const lines = lineBuffer.split(/\r?\n/);
+      lineBuffer = lines.pop() ?? '';
+      lines.forEach(handleLine);
+    }
+
+    async function readSerial(capturedPort) {
+      try {
+        reader = capturedPort.readable.getReader();
+        while (serialPort === capturedPort) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) handleBytes(value);
+        }
+      } catch (error) {
+        if (!closing) setConnection('error', '串口读取中断');
+      } finally {
+        if (reader) {
+          reader.releaseLock();
+          reader = null;
+        }
+        if (!closing && serialPort === capturedPort) {
+          if (writer) {
+            writer.releaseLock();
+            writer = null;
+          }
+          try { await capturedPort.close(); } catch (_) {}
+          serialPort = null;
+          setConnection('offline', '重新连接');
+        }
+      }
+    }
+
+    async function sendCommand(command) {
+      if (!writer) return;
+      try {
+        await writer.write(encoder.encode(`${command}\n`));
+      } catch (_) {
+        setConnection('error', '串口写入失败');
+      }
+    }
+
+    async function disconnectSerial(label = '连接设备') {
+      if (!serialPort) return;
+      closing = true;
+      const capturedPort = serialPort;
+      if (reader) {
+        try { await reader.cancel(); } catch (_) {}
+      }
+      if (readLoopPromise) {
+        try { await readLoopPromise; } catch (_) {}
+      }
+      if (writer) {
+        writer.releaseLock();
+        writer = null;
+      }
+      try { await capturedPort.close(); } catch (_) {}
+      serialPort = null;
+      readLoopPromise = null;
+      lineBuffer = '';
+      closing = false;
+      setConnection('offline', label);
+    }
+
+    async function connectSerial() {
+      if (serialPort) {
+        await disconnectSerial();
+        return;
+      }
+      try {
+        setConnection('offline', '选择串口…');
+        const selectedPort = await navigator.serial.requestPort({
+          filters: [{ usbVendorId: 0x303a }],
+        });
+        await selectedPort.open({ baudRate: 115200, bufferSize: 1024 });
+        serialPort = selectedPort;
+        writer = selectedPort.writable.getWriter();
+        readLoopPromise = readSerial(selectedPort);
+        setConnection('online', '设备在线 · 断开');
+        await sendCommand('STATE');
+      } catch (error) {
+        serialPort = null;
+        writer = null;
+        if (error.name === 'NotFoundError') {
+          setConnection('offline', '连接设备');
+        } else {
+          setConnection('error', '连接失败 · 重试');
+        }
+      }
+    }
+
+    connectDevice.addEventListener('click', connectSerial);
+    toggle.addEventListener('click', () => sendCommand('TOGGLE'));
+    slower.addEventListener('click', () => {
+      sendCommand(`BPM ${Math.max(40, state.bpm - 1)}`);
+    });
+    faster.addEventListener('click', () => {
+      sendCommand(`BPM ${Math.min(240, state.bpm + 1)}`);
+    });
+
+    if ('serial' in navigator) {
+      navigator.serial.addEventListener('disconnect', event => {
+        if (event.target === serialPort) void disconnectSerial('设备已断开');
+      });
+      setConnection('offline', '连接设备');
+    } else {
+      connectDevice.disabled = true;
+      setConnection('error', '浏览器不支持 Web Serial');
+    }
+
+    render(state);
+  </script>
+</body>
+</html>

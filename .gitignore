@@ -1,0 +1,8 @@
+build/
+managed_components/
+node_modules/
+sdkconfig
+sdkconfig.old
+.DS_Store
+host_tests/metronome_core_test
+easyinput-board-cy/
