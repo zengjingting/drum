@@ -99,6 +99,19 @@ static void test_tail_fade_and_soft_limiter(void)
            -drum_mixer_soft_limit(-1000000));
 }
 
+static void test_board_gain_can_exceed_unity(void)
+{
+    const drum_sample_t boosted = {
+        .pcm = s_sample_a,
+        .sample_count = 70,
+        .gain_q15 = 49152, /* 1.5 in Q15. */
+    };
+    drum_mixer_t mixer;
+    drum_mixer_init(&mixer);
+    assert(drum_mixer_trigger(&mixer, &boosted));
+    assert(drum_mixer_render(&mixer) == 1500);
+}
+
 static void test_invalid_inputs(void)
 {
     drum_mixer_t mixer;
@@ -117,6 +130,7 @@ int main(void)
     test_overlap_and_retrigger();
     test_voice_capacity_preserves_active_audio();
     test_tail_fade_and_soft_limiter();
+    test_board_gain_can_exceed_unity();
     test_invalid_inputs();
     puts("drum_mixer: all tests passed");
     return 0;

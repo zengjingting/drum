@@ -54,7 +54,7 @@ int32_t drum_mixer_render(drum_mixer_t *mixer)
         }
 
         const int32_t value = sample->pcm[voice->position];
-        mixed += (value * gain_q15) >> 15;
+        mixed += (int32_t)(((int64_t)value * gain_q15) >> 15);
         voice->position++;
         if (voice->position >= sample->sample_count) {
             voice->sample = NULL;

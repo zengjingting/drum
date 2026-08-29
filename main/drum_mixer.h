@@ -10,7 +10,8 @@
 typedef struct {
     const int16_t *pcm;
     uint32_t sample_count;
-    int16_t gain_q15;
+    /* Q15 scale; int32_t intentionally permits board-EQ boosts above 1.0. */
+    int32_t gain_q15;
 } drum_sample_t;
 
 typedef struct {
