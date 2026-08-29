@@ -25,3 +25,4 @@ void metronome_app_set_bpm(int bpm);
 void metronome_app_adjust_bpm(int delta);
 void metronome_app_set_running(bool running);
 void metronome_app_toggle(void);
+bool metronome_app_trigger_drum(uint8_t pad_index);

@@ -5,20 +5,23 @@
 
 #include "board_pins.h"
 #include "driver/i2s_std.h"
+#include "drum_mixer.h"
+#include "drum_samples.h"
 #include "esp_log.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "metronome_core.h"
 
-#define AUDIO_FRAMES_PER_BLOCK 128
+#define AUDIO_FRAMES_PER_BLOCK 64
 #define MAX_SUBSCRIBERS 4
-#define COMMAND_QUEUE_LENGTH 32
+#define COMMAND_QUEUE_LENGTH 64
 
 typedef enum {
     COMMAND_SET_BPM,
     COMMAND_ADJUST_BPM,
     COMMAND_SET_RUNNING,
     COMMAND_TOGGLE,
+    COMMAND_TRIGGER_DRUM,
 } command_type_t;
 
 typedef struct {
@@ -45,6 +48,7 @@ static metronome_state_t s_state = {
     .accent = true,
 };
 static i2s_chan_handle_t s_i2s_tx;
+static drum_mixer_t s_drum_mixer;
 
 static int clamp_bpm(int bpm)
 {
@@ -122,6 +126,15 @@ static bool apply_command(metronome_core_t *core,
                           click_voice_t *voice,
                           const metronome_command_t *command)
 {
+    if (command->type == COMMAND_TRIGGER_DRUM) {
+        const drum_sample_t *sample = drum_samples_get((size_t)command->value);
+        if (!drum_mixer_trigger(&s_drum_mixer, sample)) {
+            ESP_LOGW(TAG, "Drum voice pool full; S%d trigger dropped",
+                     command->value + 1);
+        }
+        return false;
+    }
+
     const uint16_t previous_bpm = core->bpm;
     const bool previous_running = core->running;
 
@@ -138,6 +151,8 @@ static bool apply_command(metronome_core_t *core,
         break;
     case COMMAND_TOGGLE:
         metronome_core_set_running(core, !core->running);
+        break;
+    case COMMAND_TRIGGER_DRUM:
         break;
     }
 
@@ -178,7 +193,11 @@ static void audio_task(void *arg)
                 block_accent = event.accent;
             }
 
-            const int16_t sample = core.running ? render_click_sample(&click) : 0;
+            int32_t mixed = drum_mixer_render(&s_drum_mixer);
+            if (core.running) {
+                mixed += render_click_sample(&click);
+            }
+            const int16_t sample = drum_mixer_soft_limit(mixed);
             samples[frame * 2] = sample;
             samples[frame * 2 + 1] = sample;
         }
@@ -206,6 +225,9 @@ esp_err_t metronome_app_start(void)
     if (s_command_queue == NULL || s_state_mutex == NULL) {
         return ESP_ERR_NO_MEM;
     }
+
+    drum_samples_init();
+    drum_mixer_init(&s_drum_mixer);
 
     i2s_chan_config_t channel_config =
         I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
@@ -286,33 +308,43 @@ metronome_state_t metronome_app_get_state(void)
     return state;
 }
 
-static void send_command(command_type_t type, int value)
+static bool send_command(command_type_t type, int value)
 {
     if (s_command_queue == NULL) {
-        return;
+        return false;
     }
     const metronome_command_t command = {.type = type, .value = value};
     if (xQueueSend(s_command_queue, &command, 0) != pdTRUE) {
         ESP_LOGW(TAG, "Command queue full; command dropped");
+        return false;
     }
+    return true;
 }
 
 void metronome_app_set_bpm(int bpm)
 {
-    send_command(COMMAND_SET_BPM, bpm);
+    (void)send_command(COMMAND_SET_BPM, bpm);
 }
 
 void metronome_app_adjust_bpm(int delta)
 {
-    send_command(COMMAND_ADJUST_BPM, delta);
+    (void)send_command(COMMAND_ADJUST_BPM, delta);
 }
 
 void metronome_app_set_running(bool running)
 {
-    send_command(COMMAND_SET_RUNNING, running ? 1 : 0);
+    (void)send_command(COMMAND_SET_RUNNING, running ? 1 : 0);
 }
 
 void metronome_app_toggle(void)
 {
-    send_command(COMMAND_TOGGLE, 0);
+    (void)send_command(COMMAND_TOGGLE, 0);
+}
+
+bool metronome_app_trigger_drum(uint8_t pad_index)
+{
+    if (pad_index >= DRUM_SAMPLE_COUNT) {
+        return false;
+    }
+    return send_command(COMMAND_TRIGGER_DRUM, pad_index);
 }

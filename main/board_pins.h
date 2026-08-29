@@ -11,6 +11,13 @@
 #define PIN_ENCODER_B         GPIO_NUM_16
 #define PIN_ENCODER_BUTTON    GPIO_NUM_18
 
+#define PIN_DRUM_PAD_S1       GPIO_NUM_2
+#define PIN_DRUM_PAD_S2       GPIO_NUM_47
+#define PIN_DRUM_PAD_S3       GPIO_NUM_38
+#define PIN_DRUM_PAD_S4       GPIO_NUM_41
+#define PIN_DRUM_PAD_S5       GPIO_NUM_1
+#define PIN_DRUM_PAD_S6       GPIO_NUM_6
+
 #define PIN_MIC_BCLK          GPIO_NUM_9
 #define PIN_MIC_WS            GPIO_NUM_10
 #define PIN_MIC_DATA_IN       GPIO_NUM_11
@@ -27,6 +34,7 @@
 #define METRONOME_MIN_BPM 40
 #define METRONOME_MAX_BPM 240
 #define ENCODER_BPM_PER_DETENT 1
+#define DRUM_PAD_DEBOUNCE_MS 4
 
 /* Change to -1 if clockwise rotation decreases BPM on the assembled encoder. */
 #define ENCODER_DIRECTION 1

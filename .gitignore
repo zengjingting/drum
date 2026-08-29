@@ -1,8 +1,10 @@
 build/
 managed_components/
 node_modules/
+__pycache__/
 sdkconfig
 sdkconfig.old
 .DS_Store
 host_tests/metronome_core_test
+host_tests/drum_mixer_test
 easyinput-board-cy/

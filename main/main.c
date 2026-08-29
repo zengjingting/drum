@@ -1,4 +1,5 @@
 #include "board_power.h"
+#include "drum_pads.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "input_controls.h"
@@ -35,6 +36,11 @@ void app_main(void)
     err = input_controls_start();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Encoder initialization failed: %s", esp_err_to_name(err));
+        return;
+    }
+    err = drum_pads_start();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Drum pad initialization failed: %s", esp_err_to_name(err));
         return;
     }
 

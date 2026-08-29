@@ -4,9 +4,19 @@ idf_component_register(
         "board_power.c"
         "metronome_app.c"
         "input_controls.c"
+        "drum_pads.c"
+        "drum_mixer.c"
+        "drum_samples.c"
         "led_display.c"
         "usb_serial_control.c"
     INCLUDE_DIRS "."
+    EMBED_FILES
+        "assets/drums/s1_kick.pcm"
+        "assets/drums/s2_snare.pcm"
+        "assets/drums/s3_closed_hihat.pcm"
+        "assets/drums/s4_open_hihat.pcm"
+        "assets/drums/s5_low_tom.pcm"
+        "assets/drums/s6_cymbal.pcm"
     REQUIRES
         esp_driver_gpio
         esp_driver_i2s
