@@ -104,12 +104,12 @@ static void test_board_gain_can_exceed_unity(void)
     const drum_sample_t boosted = {
         .pcm = s_sample_a,
         .sample_count = 70,
-        .gain_q15 = 49152, /* 1.5 in Q15. */
+        .gain_q15 = 98304, /* 3.0 in Q15. */
     };
     drum_mixer_t mixer;
     drum_mixer_init(&mixer);
     assert(drum_mixer_trigger(&mixer, &boosted));
-    assert(drum_mixer_render(&mixer) == 1500);
+    assert(drum_mixer_render(&mixer) == 3000);
 }
 
 static void test_invalid_inputs(void)
