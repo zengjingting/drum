@@ -11,8 +11,9 @@
 #include "freertos/task.h"
 #include "metronome_app.h"
 
-#define DRUM_PAD_COUNT 6
+#define DRUM_PAD_COUNT 7
 #define DRUM_PAD_POLL_MS 1
+#define DRUM_SAMPLE_DISABLED (-1)
 
 typedef struct {
     bool raw_pressed;
@@ -28,6 +29,12 @@ static const gpio_num_t s_pad_pins[DRUM_PAD_COUNT] = {
     PIN_DRUM_PAD_S4,
     PIN_DRUM_PAD_S5,
     PIN_DRUM_PAD_S6,
+    PIN_DRUM_PAD_S7,
+};
+
+/* Physical pad to six-slot sound-bank mapping. S3 is disabled until repaired. */
+static const int8_t s_pad_samples[DRUM_PAD_COUNT] = {
+    0, 1, DRUM_SAMPLE_DISABLED, 3, 4, 5, 2,
 };
 
 static bool pad_is_pressed(size_t index)
@@ -62,8 +69,9 @@ static void drum_pad_task(void *arg)
             if (state->stable_samples == DRUM_PAD_DEBOUNCE_MS &&
                 state->stable_pressed != state->raw_pressed) {
                 state->stable_pressed = state->raw_pressed;
-                if (state->stable_pressed &&
-                    !metronome_app_trigger_drum((uint8_t)index)) {
+                const int8_t sample_index = s_pad_samples[index];
+                if (state->stable_pressed && sample_index >= 0 &&
+                    !metronome_app_trigger_drum((uint8_t)sample_index)) {
                     ESP_LOGW(TAG, "S%u trigger queue full", (unsigned)index + 1U);
                 }
             }
@@ -96,7 +104,9 @@ esp_err_t drum_pads_start(void)
         return ESP_ERR_NO_MEM;
     }
 
-    ESP_LOGI(TAG, "S1-S6 ready on GPIO 2/47/38/41/1/6, debounce %d ms",
+    ESP_LOGI(TAG,
+             "S1-S7 ready on GPIO 2/47/38/41/1/6/7; S3 disabled, "
+             "closed hi-hat on S7; debounce %d ms",
              DRUM_PAD_DEBOUNCE_MS);
     return ESP_OK;
 }

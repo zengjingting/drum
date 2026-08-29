@@ -27,7 +27,7 @@ static const embedded_sample_t s_embedded[DRUM_SAMPLE_COUNT] = {
     {s2_snare_pcm_start, s2_snare_pcm_end, 18022, "snare"},
     {s3_closed_hihat_pcm_start, s3_closed_hihat_pcm_end, 98304, "closed hi-hat"},
     {s4_open_hihat_pcm_start, s4_open_hihat_pcm_end, 13107, "open hi-hat"},
-    {s5_clap_pcm_start, s5_clap_pcm_end, 44237, "clap"},
+    {s5_clap_pcm_start, s5_clap_pcm_end, 26214, "clap"},
     {s6_rimshot_pcm_start, s6_rimshot_pcm_end, 58982, "rimshot"},
 };
 
