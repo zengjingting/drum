@@ -18,3 +18,4 @@ cc -std=c11 -Wall -Wextra -Werror \
 ./host_tests/drum_mixer_test
 
 python3 host_tests/validate_drum_assets.py
+python3 host_tests/validate_protocol_contract.py

@@ -17,7 +17,8 @@
 #define USB_RX_BUFFER_SIZE 1024
 #define USB_TX_BUFFER_SIZE 1024
 #define COMMAND_BUFFER_SIZE 96
-#define STATE_JSON_BUFFER_SIZE 384
+#define STATE_JSON_BUFFER_SIZE 512
+#define PROTOCOL_VERSION 2
 
 static const char *TAG = "usb_control";
 static QueueHandle_t s_state_queue;
@@ -48,6 +49,8 @@ static void send_state(metronome_state_t state)
     char response[STATE_JSON_BUFFER_SIZE];
     int length = snprintf(response, sizeof(response),
                           "{\"type\":\"state\",\"bpm\":%u,\"running\":%s,"
+                          "\"protocolVersion\":%u,"
+                          "\"capabilities\":[\"pattern\",\"trigger\",\"sequencer\"],"
                           "\"accent\":%s,\"beat\":%" PRIu64 ","
                           "\"ppqnTick\":%" PRIu64 ",\"uiPosition\":%u,"
                           "\"ledPosition\":%u,\"sequenceStep\":%u,"
@@ -55,6 +58,7 @@ static void send_state(metronome_state_t state)
                           "\"pattern\":[%u,%u,%u,%u,%u,%u]}\n",
                           state.bpm,
                           state.running ? "true" : "false",
+                          PROTOCOL_VERSION,
                           state.accent ? "true" : "false",
                           state.beat_index,
                           state.ppqn_tick,
@@ -70,6 +74,17 @@ static void send_state(metronome_state_t state)
         return;
     }
     write_all(response);
+}
+
+static void send_ack(const char *command)
+{
+    char response[96];
+    int length = snprintf(response, sizeof(response),
+                          "{\"type\":\"ack\",\"command\":\"%s\"}\n",
+                          command);
+    if (length > 0 && (size_t)length < sizeof(response)) {
+        write_all(response);
+    }
 }
 
 static void send_error(const char *message)
@@ -110,6 +125,32 @@ static void handle_command(char *command)
     unsigned pad = 0;
     unsigned mask = 0;
     char trailing = '\0';
+    unsigned values[METRONOME_DRUM_TRACK_COUNT] = {0};
+    int pattern_fields = sscanf(command,
+        "PATTERN %u %u %u %u %u %u %c",
+        &values[0], &values[1], &values[2],
+        &values[3], &values[4], &values[5], &trailing);
+    if (pattern_fields == METRONOME_DRUM_TRACK_COUNT) {
+        uint16_t pattern[METRONOME_DRUM_TRACK_COUNT];
+        for (size_t index = 0; index < METRONOME_DRUM_TRACK_COUNT; ++index) {
+            if (values[index] > UINT16_MAX) {
+                send_error("PATTERN values must be 0-65535");
+                return;
+            }
+            pattern[index] = (uint16_t)values[index];
+        }
+        if (metronome_app_set_pattern(pattern)) {
+            send_ack("PATTERN");
+        } else {
+            send_error("PATTERN could not be queued");
+        }
+        return;
+    }
+    if (strncmp(command, "PATTERN", 7) == 0) {
+        send_error("PATTERN needs exactly 6 values from 0-65535");
+        return;
+    }
+
     if (sscanf(command, "MASK %u %u %c", &pad, &mask, &trailing) == 2) {
         if (pad >= 1U && pad <= 6U && mask <= UINT16_MAX &&
             metronome_app_set_pattern_mask((uint8_t)(pad - 1U),
@@ -193,6 +234,8 @@ esp_err_t usb_serial_control_start(void)
         return ESP_ERR_NO_MEM;
     }
 
-    ESP_LOGI(TAG, "USB control ready: STATE, TOGGLE, BPM, MASK, TRIGGER");
+    ESP_LOGI(TAG,
+             "USB protocol v%d ready: STATE, TOGGLE, BPM, PATTERN, MASK, TRIGGER",
+             PROTOCOL_VERSION);
     return ESP_OK;
 }

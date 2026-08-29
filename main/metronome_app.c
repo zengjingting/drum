@@ -20,6 +20,8 @@
 
 _Static_assert(METRONOME_PPQN % 4 == 0,
                "METRONOME_PPQN must divide evenly into sixteenth notes");
+_Static_assert(DRUM_SAMPLE_COUNT == METRONOME_DRUM_TRACK_COUNT,
+               "Protocol track count must match the embedded sound bank");
 
 typedef enum {
     COMMAND_SET_BPM,
@@ -28,11 +30,14 @@ typedef enum {
     COMMAND_TOGGLE,
     COMMAND_TRIGGER_DRUM,
     COMMAND_SET_PATTERN_MASK,
+    COMMAND_SET_PATTERN,
 } command_type_t;
 
 typedef struct {
     command_type_t type;
     int value;
+    uint16_t pattern[METRONOME_DRUM_TRACK_COUNT];
+    TaskHandle_t completion_task;
 } metronome_command_t;
 
 typedef struct {
@@ -161,6 +166,11 @@ static bool apply_command(metronome_core_t *core,
         return false;
     }
 
+    if (command->type == COMMAND_SET_PATTERN) {
+        memcpy(s_pattern, command->pattern, sizeof(s_pattern));
+        return true;
+    }
+
     const uint16_t previous_bpm = core->bpm;
     const bool previous_running = core->running;
 
@@ -180,6 +190,7 @@ static bool apply_command(metronome_core_t *core,
         break;
     case COMMAND_TRIGGER_DRUM:
     case COMMAND_SET_PATTERN_MASK:
+    case COMMAND_SET_PATTERN:
         break;
     }
 
@@ -206,6 +217,9 @@ static void audio_task(void *arg)
             if (apply_command(&core, &click, &command)) {
                 publish_state(snapshot_from_core(
                     &core, (core.last_beat_index % 4U) == 0U));
+            }
+            if (command.completion_task != NULL) {
+                xTaskNotifyGive(command.completion_task);
             }
         }
 
@@ -355,17 +369,22 @@ metronome_state_t metronome_app_get_state(void)
     return state;
 }
 
-static bool send_command(command_type_t type, int value)
+static bool enqueue_command(const metronome_command_t *command)
 {
-    if (s_command_queue == NULL) {
+    if (s_command_queue == NULL || command == NULL) {
         return false;
     }
-    const metronome_command_t command = {.type = type, .value = value};
-    if (xQueueSend(s_command_queue, &command, 0) != pdTRUE) {
+    if (xQueueSend(s_command_queue, command, 0) != pdTRUE) {
         ESP_LOGW(TAG, "Command queue full; command dropped");
         return false;
     }
     return true;
+}
+
+static bool send_command(command_type_t type, int value)
+{
+    const metronome_command_t command = {.type = type, .value = value};
+    return enqueue_command(&command);
 }
 
 void metronome_app_set_bpm(int bpm)
@@ -403,4 +422,26 @@ bool metronome_app_set_pattern_mask(uint8_t pad_index, uint16_t mask)
     }
     const int encoded = ((int)pad_index << 16) | mask;
     return send_command(COMMAND_SET_PATTERN_MASK, encoded);
+}
+
+bool metronome_app_set_pattern(
+    const uint16_t pattern[METRONOME_DRUM_TRACK_COUNT])
+{
+    if (pattern == NULL) {
+        return false;
+    }
+    TaskHandle_t caller = xTaskGetCurrentTaskHandle();
+    if (caller == NULL) {
+        return false;
+    }
+    (void)ulTaskNotifyTake(pdTRUE, 0);
+    metronome_command_t command = {
+        .type = COMMAND_SET_PATTERN,
+        .completion_task = caller,
+    };
+    memcpy(command.pattern, pattern, sizeof(command.pattern));
+    if (!enqueue_command(&command)) {
+        return false;
+    }
+    return ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100)) > 0U;
 }

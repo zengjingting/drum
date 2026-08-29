@@ -72,12 +72,16 @@ USB 行协议如下：
 
 ```text
 网页 -> 固件: STATE\n
+固件 -> 网页: {"type":"state","protocolVersion":2,"capabilities":["pattern","trigger","sequencer"],...}\n
 网页 -> 固件: TOGGLE\n
 网页 -> 固件: BPM 120\n
-网页 -> 固件: MASK 1 4369\n       # S1 的 16-bit 步进掩码
+网页 -> 固件: PATTERN 4369 4112 21845 0 0 32768\n
+固件 -> 网页: {"type":"ack","command":"PATTERN"}\n
 网页 -> 固件: TRIGGER 1\n         # 试听 S1
 固件 -> 网页: {"type":"state","bpm":120,"running":true,"sequenceStep":0,"pattern":[4369,0,0,0,0,0],...}\n
 ```
+
+协议 v2 的 `PATTERN` 会将六轨 16-bit 掩码作为一个音频任务命令原子更新；音频任务完成应用并发布新状态后，USB 才返回 ACK。固件仍接受旧 `MASK <track> <mask>` 作为兼容入口，但当前网页不再逐轨发送。网页只有在 `STATE` 声明 `pattern`、`trigger`、`sequencer` 能力后才启用相应控件，并在收到 `PATTERN` ACK 后标记同步完成。协议错误显示在音序器区域，不会被误判为 USB 断线。
 
 ## 本机确定性测试
 
@@ -92,10 +96,10 @@ sh host_tests/run_tests.sh
 - `ENCODER_DIRECTION=1` 是否对应实物顺时针加速；如果方向相反，将 `main/board_pins.h` 中它改为 `-1`。
 - 50 ms 上电等待是否覆盖当前实板/批次的 GPIO8 电源稳定时间；现有硬件资料没有 ready 信号或跨批次最短值。
 - MAX98357A 当前装配的声道选择、实际响度，以及两种 click 音色是否合适。
-- S1–S6 的实物响应、六种 PCM 的主观音量平衡，以及人手快速连击/多键齐按时是否存在可感知延迟、爆音或中断。
+- S1、S2、S4–S7 的实物响应、六种 PCM 的主观音量平衡，以及人手快速连击/多键齐按时是否存在可感知延迟、爆音或中断。
 - WS2812 在电池/USB 两种供电下的数据高电平裕量和亮度。
 - I2S 声音、LED 和 USB 网页事件之间的真机相位差；软件路径共享样本基准，但尚未用逻辑分析仪/示波器测量。
 
 ## 关键配置
 
-板级 GPIO 和项目参数集中在 `main/board_pins.h`。GPIO8、GPIO12、S1–S6、音频、编码器与 USB 引脚来自 `easyinput-board-cy` 的板级合同；BPM 范围、音色映射、消抖、多声部策略、灯效、USB 控制协议和编码器方向均是本项目策略，不回写为开发板默认事实。
+板级 GPIO 和项目参数集中在 `main/board_pins.h`。GPIO8、GPIO12、S1–S8、音频、编码器与 USB 引脚来自 `easyinput-board-cy` 的板级合同；当前启用按键、BPM 范围、音色映射、消抖、多声部策略、灯效、USB 控制协议和编码器方向均是本项目策略，不回写为开发板默认事实。

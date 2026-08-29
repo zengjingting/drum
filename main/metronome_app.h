@@ -7,6 +7,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 
+#define METRONOME_DRUM_TRACK_COUNT 6
+
 typedef struct {
     uint16_t bpm;
     bool running;
@@ -18,7 +20,7 @@ typedef struct {
     uint8_t sequence_step;
     uint8_t last_pad;
     uint32_t pad_event;
-    uint16_t pattern[6];
+    uint16_t pattern[METRONOME_DRUM_TRACK_COUNT];
 } metronome_state_t;
 
 esp_err_t metronome_app_start(void);
@@ -31,3 +33,5 @@ void metronome_app_set_running(bool running);
 void metronome_app_toggle(void);
 bool metronome_app_trigger_drum(uint8_t pad_index);
 bool metronome_app_set_pattern_mask(uint8_t pad_index, uint16_t mask);
+bool metronome_app_set_pattern(
+    const uint16_t pattern[METRONOME_DRUM_TRACK_COUNT]);
