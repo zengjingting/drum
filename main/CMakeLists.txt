@@ -15,8 +15,8 @@ idf_component_register(
         "assets/drums/s2_snare.pcm"
         "assets/drums/s3_closed_hihat.pcm"
         "assets/drums/s4_open_hihat.pcm"
-        "assets/drums/s5_low_tom.pcm"
-        "assets/drums/s6_cymbal.pcm"
+        "assets/drums/s5_clap.pcm"
+        "assets/drums/s6_rimshot.pcm"
     REQUIRES
         esp_driver_gpio
         esp_driver_i2s

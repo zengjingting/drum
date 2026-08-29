@@ -7,10 +7,10 @@ from pathlib import Path
 EXPECTED = {
     "s1_kick.pcm": (21716, "2cc07fe66c70cb8522fb44500ce026baa94e8574d934db0c399158669262b28f"),
     "s2_snare.pcm": (21308, "c4928e4fcaeb0cd3d040a90102a42be78738adc782f01665847de5b0e45341a0"),
-    "s3_closed_hihat.pcm": (17412, "c92fd18054f276a55b4bb8bcc3d56dd38f7ce9f24bf8dff708bd67414d4fde9f"),
+    "s3_closed_hihat.pcm": (31312, "3bf08a2f5d0786ea11f54f1dc738302bf5cfd6da5d10183dad8016c2c69f0a5f"),
     "s4_open_hihat.pcm": (39010, "8deb049183fdeb281fc6bab4894ce188b53d0d48d55284aa476599d2881c2c8b"),
-    "s5_low_tom.pcm": (51340, "b72a3e241bcc2fc58c5eb624b094b2ef4177f9ef4311ae785039622a222c8707"),
-    "s6_cymbal.pcm": (178330, "bb395ece39506e497b5232a5fcaf68826d6aac3ecaea9670434afca7332015af"),
+    "s5_clap.pcm": (81920, "c97cc58cbdb17af8a9399b0dd1bfb23516601de3cb9a0ff1304483ae8c3cddb1"),
+    "s6_rimshot.pcm": (24004, "3164c9e72d4116803b2095183cd824e78df5d5de9dfd20f63efedb07f5843852"),
 }
 
 
