@@ -15,6 +15,10 @@ typedef struct {
     uint64_t ppqn_tick;
     uint8_t ui_position;
     uint8_t led_position;
+    uint8_t sequence_step;
+    uint8_t last_pad;
+    uint32_t pad_event;
+    uint16_t pattern[6];
 } metronome_state_t;
 
 esp_err_t metronome_app_start(void);
@@ -26,3 +30,4 @@ void metronome_app_adjust_bpm(int delta);
 void metronome_app_set_running(bool running);
 void metronome_app_toggle(void);
 bool metronome_app_trigger_drum(uint8_t pad_index);
+bool metronome_app_set_pattern_mask(uint8_t pad_index, uint16_t mask);

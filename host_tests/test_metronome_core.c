@@ -79,12 +79,42 @@ static void test_stop_and_restart_resets_transport(void)
     assert(core.ppqn_tick == 0);
 }
 
+static void test_sixteenth_steps_follow_bpm(void)
+{
+    metronome_core_t core;
+    metronome_core_event_t event;
+    metronome_core_init(&core, 48000, 96, 120);
+    metronome_core_set_running(&core, true);
+
+    uint64_t step_samples[4] = {0};
+    size_t step_count = 0;
+    for (uint64_t sample = 0; sample < 15000; ++sample) {
+        metronome_core_step(&core, &event);
+        const bool step =
+            (event.beat && event.beat_index == 0 && core.ppqn_tick == 0) ||
+            (event.ppqn_ticks > 0 && (core.ppqn_tick % 24) == 0);
+        if (step && step_count < 4) {
+            step_samples[step_count++] = sample;
+            if (step_count == 2) {
+                metronome_core_set_bpm(&core, 240);
+            }
+        }
+    }
+
+    assert(step_count == 4);
+    assert(step_samples[0] == 0);
+    assert(step_samples[1] == 6000);
+    assert(step_samples[2] == 9000);
+    assert(step_samples[3] == 12000);
+}
+
 int main(void)
 {
     test_exact_120_bpm_spacing();
     test_fractional_bpm_has_bounded_phase_error();
     test_ping_pong_sequences();
     test_stop_and_restart_resets_transport();
+    test_sixteenth_steps_follow_bpm();
     puts("metronome_core: all tests passed");
     return 0;
 }

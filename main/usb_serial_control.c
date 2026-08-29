@@ -17,7 +17,7 @@
 #define USB_RX_BUFFER_SIZE 1024
 #define USB_TX_BUFFER_SIZE 1024
 #define COMMAND_BUFFER_SIZE 96
-#define STATE_JSON_BUFFER_SIZE 192
+#define STATE_JSON_BUFFER_SIZE 384
 
 static const char *TAG = "usb_control";
 static QueueHandle_t s_state_queue;
@@ -50,14 +50,21 @@ static void send_state(metronome_state_t state)
                           "{\"type\":\"state\",\"bpm\":%u,\"running\":%s,"
                           "\"accent\":%s,\"beat\":%" PRIu64 ","
                           "\"ppqnTick\":%" PRIu64 ",\"uiPosition\":%u,"
-                          "\"ledPosition\":%u}\n",
+                          "\"ledPosition\":%u,\"sequenceStep\":%u,"
+                          "\"lastPad\":%u,\"padEvent\":%" PRIu32 ","
+                          "\"pattern\":[%u,%u,%u,%u,%u,%u]}\n",
                           state.bpm,
                           state.running ? "true" : "false",
                           state.accent ? "true" : "false",
                           state.beat_index,
                           state.ppqn_tick,
                           state.ui_position,
-                          state.led_position);
+                          state.led_position,
+                          state.sequence_step,
+                          state.last_pad,
+                          state.pad_event,
+                          state.pattern[0], state.pattern[1], state.pattern[2],
+                          state.pattern[3], state.pattern[4], state.pattern[5]);
     if (length < 0 || (size_t)length >= sizeof(response)) {
         ESP_LOGE(TAG, "State response buffer is too small");
         return;
@@ -97,6 +104,28 @@ static void handle_command(char *command)
             return;
         }
         send_error("BPM must be an integer from 40 to 240");
+        return;
+    }
+
+    unsigned pad = 0;
+    unsigned mask = 0;
+    char trailing = '\0';
+    if (sscanf(command, "MASK %u %u %c", &pad, &mask, &trailing) == 2) {
+        if (pad >= 1U && pad <= 6U && mask <= UINT16_MAX &&
+            metronome_app_set_pattern_mask((uint8_t)(pad - 1U),
+                                           (uint16_t)mask)) {
+            return;
+        }
+        send_error("MASK needs pad 1-6 and value 0-65535");
+        return;
+    }
+
+    if (sscanf(command, "TRIGGER %u %c", &pad, &trailing) == 1) {
+        if (pad >= 1U && pad <= 6U &&
+            metronome_app_trigger_drum((uint8_t)(pad - 1U))) {
+            return;
+        }
+        send_error("TRIGGER needs pad 1-6");
         return;
     }
 
@@ -164,6 +193,6 @@ esp_err_t usb_serial_control_start(void)
         return ESP_ERR_NO_MEM;
     }
 
-    ESP_LOGI(TAG, "USB Serial/JTAG control ready: STATE, TOGGLE, BPM <40-240>");
+    ESP_LOGI(TAG, "USB control ready: STATE, TOGGLE, BPM, MASK, TRIGGER");
     return ESP_OK;
 }

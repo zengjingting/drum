@@ -15,6 +15,11 @@
 #define AUDIO_FRAMES_PER_BLOCK 64
 #define MAX_SUBSCRIBERS 4
 #define COMMAND_QUEUE_LENGTH 64
+#define SEQUENCE_STEP_COUNT 16
+#define SEQUENCE_TICKS_PER_STEP (METRONOME_PPQN / 4)
+
+_Static_assert(METRONOME_PPQN % 4 == 0,
+               "METRONOME_PPQN must divide evenly into sixteenth notes");
 
 typedef enum {
     COMMAND_SET_BPM,
@@ -22,6 +27,7 @@ typedef enum {
     COMMAND_SET_RUNNING,
     COMMAND_TOGGLE,
     COMMAND_TRIGGER_DRUM,
+    COMMAND_SET_PATTERN_MASK,
 } command_type_t;
 
 typedef struct {
@@ -49,6 +55,9 @@ static metronome_state_t s_state = {
 };
 static i2s_chan_handle_t s_i2s_tx;
 static drum_mixer_t s_drum_mixer;
+static uint16_t s_pattern[DRUM_SAMPLE_COUNT];
+static uint32_t s_pad_event;
+static uint8_t s_last_pad;
 
 static int clamp_bpm(int bpm)
 {
@@ -64,7 +73,7 @@ static int clamp_bpm(int bpm)
 static metronome_state_t snapshot_from_core(const metronome_core_t *core,
                                              bool accent)
 {
-    return (metronome_state_t) {
+    metronome_state_t state = {
         .bpm = core->bpm,
         .running = core->running,
         .accent = accent,
@@ -72,7 +81,13 @@ static metronome_state_t snapshot_from_core(const metronome_core_t *core,
         .ppqn_tick = core->ppqn_tick,
         .ui_position = core->ui_position,
         .led_position = core->led_position,
+        .sequence_step = (uint8_t)((core->ppqn_tick /
+                            SEQUENCE_TICKS_PER_STEP) % SEQUENCE_STEP_COUNT),
+        .last_pad = s_last_pad,
+        .pad_event = s_pad_event,
     };
+    memcpy(state.pattern, s_pattern, sizeof(state.pattern));
+    return state;
 }
 
 static void publish_state(metronome_state_t state)
@@ -132,6 +147,17 @@ static bool apply_command(metronome_core_t *core,
             ESP_LOGW(TAG, "Drum voice pool full; S%d trigger dropped",
                      command->value + 1);
         }
+        s_last_pad = (uint8_t)command->value;
+        s_pad_event++;
+        return true;
+    }
+
+    if (command->type == COMMAND_SET_PATTERN_MASK) {
+        const uint8_t pad = (uint8_t)((uint32_t)command->value >> 16);
+        if (pad < DRUM_SAMPLE_COUNT) {
+            s_pattern[pad] = (uint16_t)command->value;
+            return true;
+        }
         return false;
     }
 
@@ -153,6 +179,7 @@ static bool apply_command(metronome_core_t *core,
         metronome_core_set_running(core, !core->running);
         break;
     case COMMAND_TRIGGER_DRUM:
+    case COMMAND_SET_PATTERN_MASK:
         break;
     }
 
@@ -183,10 +210,30 @@ static void audio_task(void *arg)
         }
 
         bool block_has_beat = false;
+        bool block_has_sequence_step = false;
         bool block_accent = false;
         for (size_t frame = 0; frame < AUDIO_FRAMES_PER_BLOCK; ++frame) {
             metronome_core_event_t event;
             metronome_core_step(&core, &event);
+            const bool sequence_step =
+                (event.beat && event.beat_index == 0U && core.ppqn_tick == 0U) ||
+                (event.ppqn_ticks > 0U &&
+                 (core.ppqn_tick % SEQUENCE_TICKS_PER_STEP) == 0U);
+            if (sequence_step) {
+                const uint8_t step = (uint8_t)((core.ppqn_tick /
+                                     SEQUENCE_TICKS_PER_STEP) %
+                                     SEQUENCE_STEP_COUNT);
+                for (size_t pad = 0; pad < DRUM_SAMPLE_COUNT; ++pad) {
+                    if ((s_pattern[pad] & (1U << step)) != 0U) {
+                        if (!drum_mixer_trigger(&s_drum_mixer,
+                                                drum_samples_get(pad))) {
+                            ESP_LOGW(TAG, "Sequence trigger dropped: S%u step %u",
+                                     (unsigned)pad + 1U, (unsigned)step + 1U);
+                        }
+                    }
+                }
+                block_has_sequence_step = true;
+            }
             if (event.beat) {
                 start_click(&click, event.accent);
                 block_has_beat = true;
@@ -211,7 +258,7 @@ static void audio_task(void *arg)
                      (unsigned)sizeof(samples));
         }
 
-        if (block_has_beat) {
+        if (block_has_beat || block_has_sequence_step) {
             publish_state(snapshot_from_core(&core, block_accent));
         }
     }
@@ -347,4 +394,13 @@ bool metronome_app_trigger_drum(uint8_t pad_index)
         return false;
     }
     return send_command(COMMAND_TRIGGER_DRUM, pad_index);
+}
+
+bool metronome_app_set_pattern_mask(uint8_t pad_index, uint16_t mask)
+{
+    if (pad_index >= DRUM_SAMPLE_COUNT) {
+        return false;
+    }
+    const int encoded = ((int)pad_index << 16) | mask;
+    return send_command(COMMAND_SET_PATTERN_MASK, encoded);
 }

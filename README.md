@@ -1,4 +1,4 @@
-# EasyInput V2.0 稳定节拍器
+# EasyInput V2.0 鼓机与稳定节拍器
 
 这是一个面向 EasyInput V2.0（固件板型别名 `v2`，PCB 丝印 `AI Keyboard V2.1`）的 ESP-IDF 固件。它以扬声器 I2S TX 的连续 48 kHz 样本流作为唯一节拍时间基准，在样本域内累计 96 PPQN；网页、旋钮、声音和 5 颗 WS2812 都消费同一份固件状态，但网页不参与计时。
 
@@ -10,9 +10,11 @@
 - 扬声器 I2S：BCLK/WS/DOUT=`GPIO14/13/15`，48 kHz、16-bit、立体声重复采样。节拍停止时仍连续发送静音，I2S 主时钟不会因为停止或网页断开而消失。
 - 96 PPQN 使用整数相位累计，不按 RTOS tick 延时推拍；默认 120 BPM，可调 40–240 BPM。
 - 第 1、5、9…拍为 1760 Hz 强拍；其余拍为 1120 Hz 普通拍，非发声区间输出静音。
-- S1–S6 是低有效独立鼓垫，4 ms 消抖；按下后通过同一条连续 I2S 音频链直接触发板载 PCM，即使节拍器处于停止状态也能演奏。
+- S1、S2、S4–S7 是当前启用的低有效独立鼓垫，4 ms 消抖；S3 因硬件故障暂不触发，原 S3 闭镲迁移到 S7。按键通过同一条连续 I2S 音频链直接触发板载 PCM，即使节拍器处于停止状态也能演奏。
+- 网页同步显示当前六个实体按键与音色的映射；实体按钮或网页试听触发时，对应音色卡片会高亮反馈。
+- 网页提供六轨、每轨 16 步的可编辑音序器。每步是 1/16 音符，固件每 24 个 PPQN tick 推进一步，并直接在 I2S 音频任务中触发音色，因此会跟随 40–240 BPM 的实时变化而不依赖浏览器计时。
 - 128 声部非抢占混音允许多键和同键快速重触发自然叠加；新触发不会偷取或截断已经播放的声音。混音输出带 64-sample 尾部淡出和整数软限幅。
-- 针对实板小扬声器的频响，S1 底鼓、S3 闭镲和 S5 低音鼓使用超过 1.0 的 Q15 板级增益补偿；总混音仍经软限幅，避免数字硬削波。
+- 针对实板小扬声器的频响，S1 底鼓、S7 闭镲、S5 拍手和 S6 鼓边击使用独立 Q15 板级增益；S5 已下调约 4.5 dB，总混音仍经软限幅，避免数字硬削波。
 - 编码器 A/B/按压=`GPIO17/16/18`：每格调 1 BPM，按压切换开始/停止，25 ms 按压消抖。
 - 5 颗 WS2812 通过 GPIO12 显示 `0→1→2→3→4→3→2→1` 往返光点；事件来自 I2S 样本累计。
 - ESP32-S3 原生 USB Serial/JTAG 提供网页控制通道，不再创建 Wi-Fi AP，也不需要电脑切换网络。
@@ -23,18 +25,18 @@
 
 ## 板载鼓音色
 
-六种音色来自 FreePats `SynthesizerPercussion-SFZ-20220718`，以 CC0 1.0 发布。原始 WAV 已是 48 kHz 单声道；仓库保存的是去掉 WAV 容器并统一为 signed 16-bit little-endian 的原始 PCM，无运行时解码或重采样。
+六种音色来自 FreePats `SynthesizerPercussion-SFZ-20220718` 和固定版本的 Free Drum Samples，两个上游均声明为 CC0 1.0。仓库保存统一转换为 48 kHz、单声道、signed 16-bit little-endian 的板载 PCM，无运行时解码或重采样。
 
 | 按键 | GPIO | 音色 | 原始样本 |
 | --- | ---: | --- | --- |
-| S1 | 2 | Kick | `Kick04.wav` |
+| S1 | 2 | Kick | `vintage-kick-01.wav` |
 | S2 | 47 | Snare | `Snare09.wav` |
-| S3 | 38 | Closed Hi-Hat | `ClosedHiHat01-01.wav` |
+| S7 | 7 | Closed Hi-Hat | `ch-lofi.wav` |
 | S4 | 41 | Open Hi-Hat | `OpenHiHat02-01.wav` |
-| S5 | 1 | Low Tom | `LowTom02-01.wav` |
-| S6 | 6 | Cymbal | `Cymbal02.wav` |
+| S5 | 1 | Clap | `Clap01.wav` |
+| S6 | 6 | Rimshot | `perc-rimshot.wav` |
 
-来源 URL、归档 SHA-256、逐文件映射、转换命令和输出哈希记录在 `main/assets/drums/SOURCE.md`，CC0 法律文本快照保存在同目录的 `LICENSE-CC0.txt`。六个 PCM 总计约 321 KiB，并随应用镜像一起烧录到 Flash。
+来源 URL、归档 SHA-256、逐文件映射、转换命令和输出哈希记录在 `main/assets/drums/SOURCE.md`，CC0 法律文本与上游许可声明快照保存在同目录。六个 PCM 总计约 209 KiB，并随应用镜像一起烧录到 Flash。
 
 ## 构建
 
@@ -72,7 +74,9 @@ USB 行协议如下：
 网页 -> 固件: STATE\n
 网页 -> 固件: TOGGLE\n
 网页 -> 固件: BPM 120\n
-固件 -> 网页: {"type":"state","bpm":120,"running":true,...}\n
+网页 -> 固件: MASK 1 4369\n       # S1 的 16-bit 步进掩码
+网页 -> 固件: TRIGGER 1\n         # 试听 S1
+固件 -> 网页: {"type":"state","bpm":120,"running":true,"sequenceStep":0,"pattern":[4369,0,0,0,0,0],...}\n
 ```
 
 ## 本机确定性测试
