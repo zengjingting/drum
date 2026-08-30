@@ -20,6 +20,7 @@ typedef struct {
     uint8_t sequence_step;
     uint8_t last_pad;
     uint32_t pad_event;
+    uint32_t pattern_revision;
     uint16_t pattern[METRONOME_DRUM_TRACK_COUNT];
 } metronome_state_t;
 
@@ -49,4 +50,8 @@ bool metronome_app_trigger_hardware_pad(uint8_t pad_index);
 bool metronome_app_capture_marker(metronome_capture_marker_t *marker);
 bool metronome_app_set_pattern_mask(uint8_t pad_index, uint16_t mask);
 bool metronome_app_set_pattern(
+    const uint16_t pattern[METRONOME_DRUM_TRACK_COUNT]);
+bool metronome_app_commit_pattern(
+    uint32_t revision,
+    uint16_t bpm,
     const uint16_t pattern[METRONOME_DRUM_TRACK_COUNT]);

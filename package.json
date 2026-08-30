@@ -5,6 +5,6 @@
   "scripts": {
     "dev": "python3 web_server.py",
     "dev:mock": "python3 web_server.py --mock",
-    "test:web": "python3 -m unittest discover -s host_tests -p 'test_web_*.py' -v && node host_tests/web_ai_test.mjs && node host_tests/web_recording_test.mjs && node host_tests/web_explanation_test.mjs"
+    "test:web": "python3 -m unittest discover -s host_tests -p 'test_web_*.py' -v && node host_tests/web_ai_test.mjs && node host_tests/web_recording_test.mjs && node host_tests/web_explanation_test.mjs && node host_tests/web_tempo_revision_test.mjs"
   }
 }

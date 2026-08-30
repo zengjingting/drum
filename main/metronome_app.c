@@ -1,7 +1,6 @@
 #include "metronome_app.h"
 
 #include <inttypes.h>
-#include <math.h>
 #include <string.h>
 
 #include "board_pins.h"
@@ -34,6 +33,7 @@ typedef enum {
     COMMAND_CAPTURE_MARKER,
     COMMAND_SET_PATTERN_MASK,
     COMMAND_SET_PATTERN,
+    COMMAND_COMMIT_PATTERN,
 } command_type_t;
 
 typedef struct {
@@ -42,16 +42,9 @@ typedef struct {
     uint16_t pattern[METRONOME_DRUM_TRACK_COUNT];
     TaskHandle_t completion_task;
     bool hardware_source;
+    uint32_t revision;
     metronome_capture_marker_t *marker_out;
 } metronome_command_t;
-
-typedef struct {
-    float phase;
-    float phase_step;
-    float gain;
-    uint32_t samples_left;
-    uint32_t total_samples;
-} click_voice_t;
 
 static const char *TAG = "metronome";
 static QueueHandle_t s_command_queue;
@@ -72,6 +65,7 @@ static uint32_t s_pad_event;
 static uint8_t s_last_pad;
 static uint32_t s_hardware_pad_event;
 static uint32_t s_dropped_pad_events;
+static uint32_t s_pattern_revision;
 
 static int clamp_bpm(int bpm)
 {
@@ -99,6 +93,7 @@ static metronome_state_t snapshot_from_core(const metronome_core_t *core,
                             SEQUENCE_TICKS_PER_STEP) % SEQUENCE_STEP_COUNT),
         .last_pad = s_last_pad,
         .pad_event = s_pad_event,
+        .pattern_revision = s_pattern_revision,
     };
     memcpy(state.pattern, s_pattern, sizeof(state.pattern));
     return state;
@@ -146,38 +141,7 @@ static void publish_pad_event(metronome_pad_event_t event)
     }
 }
 
-static void start_click(click_voice_t *voice, bool accent)
-{
-    const float frequency_hz = accent ? 1760.0f : 1120.0f;
-    const float duration_ms = accent ? 28.0f : 20.0f;
-    voice->phase = 0.0f;
-    voice->phase_step = 2.0f * (float)M_PI * frequency_hz /
-                        (float)METRONOME_SAMPLE_RATE_HZ;
-    voice->gain = accent ? 0.34f : 0.22f;
-    voice->total_samples = (uint32_t)(duration_ms *
-                           (float)METRONOME_SAMPLE_RATE_HZ / 1000.0f);
-    voice->samples_left = voice->total_samples;
-}
-
-static int16_t render_click_sample(click_voice_t *voice)
-{
-    if (voice->samples_left == 0 || voice->total_samples == 0) {
-        return 0;
-    }
-
-    const float envelope = (float)voice->samples_left /
-                           (float)voice->total_samples;
-    const float sample = sinf(voice->phase) * voice->gain * envelope * envelope;
-    voice->phase += voice->phase_step;
-    if (voice->phase >= 2.0f * (float)M_PI) {
-        voice->phase -= 2.0f * (float)M_PI;
-    }
-    voice->samples_left--;
-    return (int16_t)(sample * 32767.0f);
-}
-
 static bool apply_command(metronome_core_t *core,
-                          click_voice_t *voice,
                           const metronome_command_t *command,
                           uint64_t audio_frame)
 {
@@ -225,6 +189,14 @@ static bool apply_command(metronome_core_t *core,
         return true;
     }
 
+    if (command->type == COMMAND_COMMIT_PATTERN) {
+        metronome_core_set_bpm(core,
+            (uint16_t)clamp_bpm(command->value));
+        memcpy(s_pattern, command->pattern, sizeof(s_pattern));
+        s_pattern_revision = command->revision;
+        return true;
+    }
+
     const uint16_t previous_bpm = core->bpm;
     const bool previous_running = core->running;
 
@@ -246,11 +218,8 @@ static bool apply_command(metronome_core_t *core,
     case COMMAND_CAPTURE_MARKER:
     case COMMAND_SET_PATTERN_MASK:
     case COMMAND_SET_PATTERN:
+    case COMMAND_COMMIT_PATTERN:
         break;
-    }
-
-    if (!core->running) {
-        memset(voice, 0, sizeof(*voice));
     }
     return previous_bpm != core->bpm || previous_running != core->running;
 }
@@ -260,7 +229,6 @@ static void audio_task(void *arg)
     (void)arg;
     int16_t samples[AUDIO_FRAMES_PER_BLOCK * 2];
     metronome_core_t core;
-    click_voice_t click = {0};
     uint64_t audio_frame = 0;
 
     metronome_core_init(&core, METRONOME_SAMPLE_RATE_HZ,
@@ -270,7 +238,7 @@ static void audio_task(void *arg)
     while (true) {
         metronome_command_t command;
         while (xQueueReceive(s_command_queue, &command, 0) == pdTRUE) {
-            if (apply_command(&core, &click, &command, audio_frame)) {
+            if (apply_command(&core, &command, audio_frame)) {
                 publish_state(snapshot_from_core(
                     &core, (core.last_beat_index % 4U) == 0U));
             }
@@ -305,15 +273,11 @@ static void audio_task(void *arg)
                 block_has_sequence_step = true;
             }
             if (event.beat) {
-                start_click(&click, event.accent);
                 block_has_beat = true;
                 block_accent = event.accent;
             }
 
             int32_t mixed = drum_mixer_render(&s_drum_mixer);
-            if (core.running) {
-                mixed += render_click_sample(&click);
-            }
             const int16_t sample = drum_mixer_soft_limit(mixed);
             samples[frame * 2] = sample;
             samples[frame * 2 + 1] = sample;
@@ -546,6 +510,33 @@ bool metronome_app_set_pattern(
     metronome_command_t command = {
         .type = COMMAND_SET_PATTERN,
         .completion_task = caller,
+    };
+    memcpy(command.pattern, pattern, sizeof(command.pattern));
+    if (!enqueue_command(&command)) {
+        return false;
+    }
+    return ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100)) > 0U;
+}
+
+bool metronome_app_commit_pattern(
+    uint32_t revision,
+    uint16_t bpm,
+    const uint16_t pattern[METRONOME_DRUM_TRACK_COUNT])
+{
+    if (pattern == NULL || bpm < METRONOME_MIN_BPM ||
+        bpm > METRONOME_MAX_BPM) {
+        return false;
+    }
+    TaskHandle_t caller = xTaskGetCurrentTaskHandle();
+    if (caller == NULL) {
+        return false;
+    }
+    (void)ulTaskNotifyTake(pdTRUE, 0);
+    metronome_command_t command = {
+        .type = COMMAND_COMMIT_PATTERN,
+        .value = bpm,
+        .completion_task = caller,
+        .revision = revision,
     };
     memcpy(command.pattern, pattern, sizeof(command.pattern));
     if (!enqueue_command(&command)) {

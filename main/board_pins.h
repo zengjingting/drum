@@ -18,6 +18,7 @@
 #define PIN_DRUM_PAD_S5       GPIO_NUM_1
 #define PIN_DRUM_PAD_S6       GPIO_NUM_6
 #define PIN_DRUM_PAD_S7       GPIO_NUM_7
+#define PIN_CAPTURE_BUTTON_S8 GPIO_NUM_48
 
 #define PIN_MIC_BCLK          GPIO_NUM_9
 #define PIN_MIC_WS            GPIO_NUM_10

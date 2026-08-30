@@ -46,8 +46,13 @@ export function validateRecordBoundary(message, expectedPhase) {
       throw new PadRecordingError('protocol_error', `录制边界字段 ${field} 不合法。`);
     }
   }
+  const origin = message.origin || 'web';
+  if (!['web', 's8', 'system'].includes(origin)) {
+    throw new PadRecordingError('protocol_error', '录制边界 origin 不合法。');
+  }
   return {
     phase: message.phase,
+    origin,
     frame: message.frame,
     lastEvent: message.lastEvent,
     dropped: message.dropped,

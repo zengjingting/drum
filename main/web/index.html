@@ -118,11 +118,17 @@
       gap: 14px;
     }
     .tempo-panel { display: flex; align-items: center; gap: 9px; }
+    .tempo-main { display: grid; gap: 3px; }
     .tempo-label { margin: 0; color: var(--muted); font: 700 8px/1 ui-monospace, monospace; letter-spacing: .14em; }
     .tempo-readout { display: flex; align-items: baseline; gap: 6px; }
     #bpmValue { font-size: 31px; font-weight: 760; line-height: .8; letter-spacing: -.06em; font-variant-numeric: tabular-nums; }
     .unit { color: var(--muted); font: 700 9px/1 ui-monospace, monospace; letter-spacing: .10em; }
     .tempo-buttons { display: grid; grid-template-columns: repeat(2, 26px); gap: 4px; }
+    .tempo-state { min-height: 9px; margin: 0; color: var(--muted); font: 700 7px/1 ui-monospace, monospace; letter-spacing: .08em; }
+    .tempo-candidates { display: flex; gap: 3px; min-height: 20px; align-items: center; }
+    .tempo-chip { min-width: 31px; height: 20px; padding: 0 5px; border: 1px solid #344144; border-radius: 4px; color: #9ba5a5; background: #0b0f11; font: 700 8px/1 ui-monospace, monospace; cursor: pointer; }
+    .tempo-chip.selected { color: #07100f; border-color: var(--cool); background: var(--cool); }
+    .tempo-chip:disabled { cursor: not-allowed; opacity: .42; }
     .icon-button {
       width: 26px;
       height: 26px;
@@ -468,7 +474,7 @@
 
       <div class="transport" aria-label="速度与播放控制">
         <div class="tempo-panel">
-          <div><p class="tempo-label">TEMPO</p><div class="tempo-readout"><span id="bpmValue">120</span><span class="unit">BPM</span></div></div>
+          <div class="tempo-main"><p class="tempo-label">TEMPO</p><div class="tempo-readout"><span id="bpmValue">120</span><span class="unit">BPM</span></div><p class="tempo-state" id="tempoState">MANUAL</p><div class="tempo-candidates" id="tempoCandidates" aria-label="检测到的速度候选"></div></div>
           <div class="tempo-buttons"><button class="icon-button" id="slower" type="button" aria-label="速度减一" disabled>−</button><button class="icon-button" id="faster" type="button" aria-label="速度加一" disabled>＋</button></div>
         </div>
         <span class="transport-divider" aria-hidden="true"></span>

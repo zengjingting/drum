@@ -16,6 +16,9 @@ assert.match(indexHtml, /id="recordPattern"[^>]*>开始录制<\/button>/);
 assert.match(indexHtml, /id="savePattern"[^>]*>保存<\/button>/);
 assert.match(indexHtml, /id="explainPattern"[^>]*>AI 解释<\/button>/);
 assert.match(appSource, /capabilities\.has\('padEvents'\)/);
+assert.match(appSource, /capabilities\.has\('hardwareCaptureButton'\)/);
+assert.match(appSource, /capabilities\.has\('revisionCommit'\)/);
+assert.match(appSource, /sendCommand\('CAPTURE READY 1'\)/);
 assert.match(appSource, /sendCommand\('RECORD START'/);
 assert.match(appSource, /sendCommand\('RECORD STOP'/);
 assert.match(appSource, /\/api\/debug\/recording-trace/);
@@ -32,14 +35,28 @@ for (const stage of [
 }
 assert.match(
   appSource,
-  /quantizePadEvents\(\s*verified\.events,\s*desiredBpm,\s*\)/,
-  'page quantization must use the current BPM instead of start/stop click duration',
+  /detectTempoCandidates\(recordedEventSnapshot/,
+  'page must detect Tempo from the immutable recording events',
+);
+assert.match(
+  appSource,
+  /quantizePadEvents\(recordedEventSnapshot, selectedBpm\)/,
+  'candidate changes must re-quantize the original events',
 );
 const padHandler = appSource.slice(
   appSource.indexOf("if (message.type === 'pad')"),
   appSource.indexOf("if (message.type === 'record')"),
 );
 assert.doesNotMatch(padHandler, /setPattern|renderPattern/, 'recording must not update steps live');
+const recordHandler = appSource.slice(
+  appSource.indexOf("if (message.type === 'record')"),
+  appSource.indexOf("if (message.type === 'error')"),
+);
+assert.ok(
+  recordHandler.indexOf("recordingPhase === 'starting'")
+    < recordHandler.indexOf('recordingBoundaryGate.resolve(message)'),
+  'the started boundary must activate recording synchronously before buffered pad lines are handled',
+);
 
 const start = { phase: 'started', frame: 1000, lastEvent: 20, dropped: 0 };
 const stop = { phase: 'stopped', frame: 169000, lastEvent: 24, dropped: 0 };
@@ -121,7 +138,9 @@ assert.throws(() => parseSavedPattern('{bad'), (error) => error.type === 'storag
 const gate = new RecordingBoundaryGate();
 const started = gate.wait('started', 1000);
 assert.equal(gate.resolve({ type: 'record', ...start }), true);
-assert.equal((await started).frame, 1000);
+const startedBoundary = await started;
+assert.equal(startedBoundary.frame, 1000);
+assert.equal(startedBoundary.origin, 'web');
 const stopped = gate.wait('stopped', 1000);
 assert.equal(gate.resolve({ type: 'record', ...stop }), true);
 assert.equal((await stopped).lastEvent, 24);

@@ -2,6 +2,7 @@ idf_component_register(
     SRCS
         "main.c"
         "board_power.c"
+        "capture_controller.c"
         "metronome_app.c"
         "input_controls.c"
         "encoder_decoder.c"

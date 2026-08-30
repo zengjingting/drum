@@ -17,11 +17,12 @@ import {
 } from './pad-recording.js';
 import {
   PatternExplanationError,
-  patternFingerprint,
   requestPatternExplanation,
 } from './pattern-explanation.js';
+import { PatternRevisionStore } from './pattern-session.js';
+import { detectTempoCandidates } from './tempo-detection.js';
 
-const REQUIRED_PROTOCOL_VERSION = 2;
+const REQUIRED_PROTOCOL_VERSION = 3;
 const COMMAND_TIMEOUT_MS = 3500;
 const RECORDING_TRACE_ENDPOINT = '/api/debug/recording-trace';
 const instruments = [
@@ -39,6 +40,8 @@ const sequenceGrid = $('#sequenceGrid');
 const squares = [...document.querySelectorAll('.beat')];
 const bpmValue = $('#bpmValue');
 const barDuration = $('#barDuration');
+const tempoState = $('#tempoState');
+const tempoCandidates = $('#tempoCandidates');
 const patternStatus = $('#patternStatus');
 const toggle = $('#toggle');
 const slower = $('#slower');
@@ -79,13 +82,21 @@ let state = {
   lastPad: 0,
 };
 let pattern = [0, 0, 0, 0, 0, 0];
-let desiredBpm = 120;
+let deviceBpm = 120;
+let detectedBpm = null;
+let selectedBpm = 120;
+let commitBpm = null;
+let tempoPhase = 'manual';
+let tempoDetection = null;
 let patternDirty = false;
 let patternInFlight = false;
 let patternQueued = false;
 let sequencerAvailable = false;
 let triggerAvailable = false;
 let recordingAvailable = false;
+let hardwareCaptureAvailable = false;
+let revisionCommitAvailable = false;
+let captureReadySent = false;
 let serialPort = null;
 let reader = null;
 let writer = null;
@@ -99,11 +110,13 @@ let aiController = null;
 let lastApplyHardwareConfirmed = false;
 let recordingPhase = 'idle';
 let recordedPadEvents = [];
+let recordedEventSnapshot = [];
 let recordingStart = null;
 let storageDirty = false;
 let explanationLoading = false;
 let explanationPayload = null;
-let explanationSourceFingerprint = null;
+let explanationSourceRevision = null;
+let explanationRequestSequence = 0;
 let patternApproximateQuantization = false;
 let recordingTraceSessionId = null;
 let recordingTraceSequence = 0;
@@ -111,6 +124,7 @@ let lastTracedDeviceState = '';
 const stateWaiters = new Set();
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
+const patternRevisions = new PatternRevisionStore();
 
 function createRecordingTraceSession() {
   const randomPart = globalThis.crypto?.randomUUID?.()
@@ -150,8 +164,7 @@ function traceDeviceState(message) {
     pattern: Array.isArray(message.pattern)
       ? message.pattern.map((value) => Number(value) & 0xffff)
       : null,
-    metronomeClickExpected: Boolean(message.running),
-    metronomeClickQuarterSteps: [1, 5, 9, 13],
+    metronomeClickExpected: false,
   };
   const signature = JSON.stringify(payload);
   if (signature === lastTracedDeviceState) return;
@@ -247,19 +260,76 @@ function controlsLocked() {
     patternInFlight
     || aiController?.phase === 'applying'
     || recordingLocksControls()
-    || explanationLoading
   );
 }
 
-function markPatternChanged() {
+function markPatternChanged(source = 'manual') {
+  const snapshot = patternRevisions.update({
+    bpm: selectedBpm,
+    masks: pattern,
+    source,
+    approximateQuantization: patternApproximateQuantization,
+  });
   storageDirty = true;
   saveStatus.textContent = '有未保存修改';
   saveStatus.classList.remove('success');
   if (explanationPayload) {
-    explanationStale.hidden = (
-      explanationSourceFingerprint === patternFingerprint(pattern, desiredBpm)
-    );
+    explanationStale.hidden = explanationSourceRevision === snapshot.revision;
+    if (!explanationStale.hidden) {
+      explanationStale.textContent = `本解释对应 v${explanationSourceRevision}，当前 Pattern 已更新至 v${snapshot.revision}。`;
+    }
   }
+  return snapshot;
+}
+
+function markPatternNameChanged() {
+  storageDirty = true;
+  saveStatus.textContent = '有未保存修改';
+  saveStatus.classList.remove('success');
+  refreshControlAvailability();
+}
+
+function renderTempo() {
+  let value = selectedBpm;
+  let mode = 'MANUAL';
+  if (['starting', 'recording', 'stopping'].includes(recordingPhase)) {
+    value = '--';
+    mode = `FREE PLAY · ${recordedPadEvents.length} HITS`;
+  } else if (tempoPhase === 'detecting') {
+    value = '--';
+    mode = 'AUTO · 检测中';
+  } else if (tempoPhase === 'candidates') {
+    value = selectedBpm;
+    mode = tempoDetection?.status === 'ambiguous'
+      ? `AUTO · 候选待试听 · ${tempoDetection.eventCount} HITS`
+      : `AUTO · ${tempoDetection?.eventCount || 0} HITS`;
+  } else if (tempoPhase === 'syncing') {
+    value = commitBpm ?? selectedBpm;
+    mode = `SYNC · v${patternRevisions.currentRevision}`;
+  } else if (state.running) {
+    value = deviceBpm;
+    mode = 'LIVE';
+  }
+  bpmValue.textContent = value;
+  barDuration.innerHTML = Number.isFinite(Number(value))
+    ? `<strong>${(240 / Number(value)).toFixed(2)} 秒</strong> / 小节`
+    : '<strong>自由演奏</strong> / 等待检测';
+  tempoState.textContent = mode;
+}
+
+function renderTempoCandidates() {
+  tempoCandidates.replaceChildren();
+  if (!tempoDetection || !['candidates', 'syncing'].includes(tempoPhase)) return;
+  tempoDetection.candidates.forEach((candidate) => {
+    const button = document.createElement('button');
+    button.className = `tempo-chip${candidate.bpm === selectedBpm ? ' selected' : ''}`;
+    button.type = 'button';
+    button.textContent = `${candidate.bpm}${candidate.recommended ? '·R' : ''}`;
+    button.title = `${candidate.acceptedCount} 次落入首小节，${candidate.ignoredCount} 次超出`;
+    button.disabled = controlsLocked() || state.running || tempoPhase === 'syncing';
+    button.addEventListener('click', () => { void selectTempoCandidate(candidate.bpm); });
+    tempoCandidates.append(button);
+  });
 }
 
 function refreshControlAvailability() {
@@ -276,6 +346,8 @@ function refreshControlAvailability() {
     && !locked
   );
   toggle.disabled = !(serialPort && writer) || locked;
+  slower.disabled = !(serialPort && writer && state.running) || locked;
+  faster.disabled = !(serialPort && writer && state.running) || locked;
   const canStopRecording = recordingPhase === 'recording';
   recordPattern.disabled = canStopRecording
     ? false
@@ -283,7 +355,9 @@ function refreshControlAvailability() {
   recordPattern.textContent = canStopRecording ? '停止录制' : '开始录制';
   recordPattern.classList.toggle('recording', canStopRecording);
   savePatternButton.disabled = locked || !hasPattern() || !storageDirty;
-  explainPattern.disabled = locked || !hasPattern();
+  explainPattern.disabled = explanationLoading || locked || !hasPattern() || Boolean(
+    serialPort && !patternRevisions.isSynced,
+  );
   patternName.disabled = locked;
   generatePattern.disabled = (
     aiController?.phase === 'generating'
@@ -291,13 +365,23 @@ function refreshControlAvailability() {
     || recordingLocksControls()
     || explanationLoading
   );
+  renderTempoCandidates();
 }
 
-function setProtocolFeatures(sequencer, trigger, padEvents, message) {
+function setProtocolFeatures(
+  sequencer,
+  trigger,
+  padEvents,
+  hardwareCapture,
+  revisionCommit,
+  message,
+) {
   const becameAvailable = !sequencerAvailable && sequencer;
   sequencerAvailable = sequencer;
   triggerAvailable = trigger;
-  recordingAvailable = padEvents;
+  hardwareCaptureAvailable = hardwareCapture;
+  revisionCommitAvailable = revisionCommit;
+  recordingAvailable = padEvents && hardwareCapture && revisionCommit;
   refreshControlAvailability();
   if (!sequencer) setPatternStatus(message, Boolean(serialPort));
   else if (becameAvailable && !patternDirty) setPatternStatus('音序器已就绪');
@@ -310,19 +394,32 @@ function applyCapabilities(message) {
   const sequencer = compatible && capabilities.has('pattern') && capabilities.has('sequencer');
   const trigger = compatible && capabilities.has('trigger');
   const padEvents = compatible && capabilities.has('padEvents');
+  const hardwareCapture = compatible && capabilities.has('hardwareCaptureButton');
+  const revisionCommit = compatible && capabilities.has('revisionCommit');
   const unavailableMessage = serialPort
     ? '当前固件不支持音序器，请升级固件'
     : '连接设备后同步';
-  const becameAvailable = setProtocolFeatures(sequencer, trigger, padEvents, unavailableMessage);
-  if (!padEvents && serialPort && !recordingLocksControls()) {
+  const becameAvailable = setProtocolFeatures(
+    sequencer,
+    trigger,
+    padEvents,
+    hardwareCapture,
+    revisionCommit,
+    unavailableMessage,
+  );
+  if ((!padEvents || !hardwareCapture || !revisionCommit) && serialPort && !recordingLocksControls()) {
     recordStatus.textContent = '当前固件不支持实体演奏录制，请升级并重新烧录。';
     recordStatus.classList.add('error');
-  } else if (!padEvents && !serialPort && !recordingLocksControls()) {
+  } else if (!recordingAvailable && !serialPort && !recordingLocksControls()) {
     recordStatus.textContent = '连接支持录制的固件后开始。';
     recordStatus.classList.remove('error', 'success');
-  } else if (padEvents && recordingPhase === 'idle') {
-    recordStatus.textContent = '设备已支持录制；点击开始后在实体 Pad 上演奏。';
+  } else if (recordingAvailable && recordingPhase === 'idle') {
+    recordStatus.textContent = '设备已支持 S8 / 网页录制；开始后自由演奏。';
     recordStatus.classList.remove('error');
+  }
+  if (recordingAvailable && !captureReadySent && writer) {
+    captureReadySent = true;
+    void sendCommand('CAPTURE READY 1');
   }
   if (becameAvailable && patternDirty) void syncPattern();
 }
@@ -369,33 +466,49 @@ function notifyStateWaiters() {
   }
 }
 
-function waitForPatternAck() {
-  return patternAckGate.wait(COMMAND_TIMEOUT_MS);
+function waitForPatternAck(snapshot) {
+  return patternAckGate.wait(COMMAND_TIMEOUT_MS, (message) => (
+    Number(message.revision) === snapshot.revision
+    && Number(message.bpm) === snapshot.bpm
+    && Array.isArray(message.pattern)
+    && message.pattern.length === snapshot.masks.length
+    && message.pattern.every(
+      (value, index) => (Number(value) & 0xffff) === snapshot.masks[index],
+    )
+  ));
 }
 
-async function transmitPattern(masks) {
+async function transmitPattern(snapshot) {
   if (!serialPort || !writer) {
     throw new AiPatternError('transport_error', '串口未连接。');
   }
-  if (!sequencerAvailable) {
-    throw new AiPatternError('protocol_error', '当前固件不支持原子 PATTERN 命令。');
+  if (!sequencerAvailable || !revisionCommitAvailable) {
+    throw new AiPatternError('protocol_error', '当前固件不支持 revision COMMIT 命令。');
   }
-  const ack = waitForPatternAck();
+  const ack = waitForPatternAck(snapshot);
   try {
     traceRecording('pattern_sync_sent', {
-      masks: masks.map((value) => Number(value) & 0xffff),
+      revision: snapshot.revision,
+      bpm: snapshot.bpm,
+      masks: snapshot.masks,
     });
-    await sendCommand(`PATTERN ${masks.join(' ')}`, true);
+    await sendCommand(
+      `COMMIT ${snapshot.revision} ${snapshot.bpm} ${snapshot.masks.join(' ')}`,
+      true,
+    );
   } catch (error) {
     patternAckGate.reject(error);
     try { await ack; } catch (_) { /* consume the rejected ACK waiter */ }
     throw error;
   }
-  await ack;
+  const message = await ack;
+  if (!patternRevisions.acknowledge(message)) {
+    throw new AiPatternError('protocol_stale', '硬件返回了旧版本或不一致的 COMMIT ACK。');
+  }
 }
 
 async function syncPattern({ throwOnError = false } = {}) {
-  if (!sequencerAvailable || !writer) {
+  if (!sequencerAvailable || !revisionCommitAvailable || !writer) {
     setPatternStatus('已在网页修改，连接设备后同步');
     refreshControlAvailability();
     return false;
@@ -408,27 +521,26 @@ async function syncPattern({ throwOnError = false } = {}) {
   patternInFlight = true;
   patternQueued = false;
   refreshControlAvailability();
-  setPatternStatus('正在同步…');
-  const masks = [...pattern];
+  const snapshot = patternRevisions.commitSnapshot();
+  commitBpm = snapshot.bpm;
+  tempoPhase = 'syncing';
+  renderTempo();
+  setPatternStatus(`正在同步 Pattern v${snapshot.revision}…`);
   try {
-    if (Number(state.bpm) !== desiredBpm) {
-      const bpmConfirmed = waitForState(
-        (next) => Number(next.bpm) === desiredBpm,
-        '硬件未确认新的 BPM。',
-      );
-      await sendCommand(`BPM ${desiredBpm}`, true);
-      await bpmConfirmed;
-    }
-    await transmitPattern(masks);
+    await transmitPattern(snapshot);
     if (patternQueued) {
       patternInFlight = false;
+      tempoPhase = tempoDetection ? 'candidates' : 'manual';
       refreshControlAvailability();
       void syncPattern();
     } else {
       patternInFlight = false;
-      patternDirty = false;
+      patternDirty = patternRevisions.currentRevision !== snapshot.revision;
+      tempoPhase = tempoDetection ? 'candidates' : 'manual';
+      commitBpm = null;
       refreshControlAvailability();
-      setPatternStatus('已同步到硬件');
+      renderTempo();
+      setPatternStatus(`Pattern v${snapshot.revision} 已同步到硬件`);
       if (aiController?.phase === 'applied') {
         lastApplyHardwareConfirmed = true;
         renderAiState(aiController.snapshot());
@@ -438,6 +550,9 @@ async function syncPattern({ throwOnError = false } = {}) {
   } catch (error) {
     patternInFlight = false;
     patternQueued = patternDirty;
+    tempoPhase = tempoDetection ? 'candidates' : 'manual';
+    commitBpm = null;
+    renderTempo();
     refreshControlAvailability();
     setPatternStatus(`同步失败：${error.message}`, true);
     if (throwOnError) throw error;
@@ -450,17 +565,17 @@ function setPatternStep(pad, step, on, send) {
   if (on) pattern[pad] |= 1 << step;
   else pattern[pad] &= ~(1 << step);
   renderPattern();
-  markPatternChanged();
+  markPatternChanged('manual_edit');
   if (send) {
     patternDirty = true;
     void syncPattern();
   }
 }
 
-function setPattern(next, send = true) {
+function setPattern(next, send = true, source = 'manual_edit') {
   pattern = next.map((value) => Number(value) & 0xffff);
   renderPattern();
-  markPatternChanged();
+  markPatternChanged(source);
   if (send) {
     patternDirty = true;
     void syncPattern();
@@ -472,6 +587,27 @@ function setRecordingError(error) {
   const message = error?.message || '录制失败，请重试。';
   recordStatus.textContent = message;
   recordStatus.classList.add('error');
+  refreshControlAvailability();
+}
+
+function activateRecording(boundary) {
+  recordingStart = boundary;
+  recordedPadEvents = [];
+  recordedEventSnapshot = [];
+  tempoDetection = null;
+  detectedBpm = null;
+  tempoPhase = 'free';
+  patternApproximateQuantization = false;
+  pattern = [0, 0, 0, 0, 0, 0];
+  patternDirty = true;
+  markPatternChanged('recording_clear');
+  renderPattern();
+  sequenceSource.textContent = '实体录制中 · 等待首个 Pad 作为第 1 步';
+  explanationResult.hidden = true;
+  recordingPhase = 'recording';
+  recordStatus.textContent = '正在录制 · 已记录 0 次敲击';
+  recordStatus.classList.remove('error', 'success');
+  renderTempo();
   refreshControlAvailability();
 }
 
@@ -490,7 +626,7 @@ async function startPadRecording() {
   }
   createRecordingTraceSession();
   traceRecording('record_start_requested', {
-    bpm: desiredBpm,
+    bpm: selectedBpm,
     patternBefore: pattern.map((value) => Number(value) & 0xffff),
   });
   recordingPhase = 'starting';
@@ -502,11 +638,12 @@ async function startPadRecording() {
   const boundary = recordingBoundaryGate.wait('started', COMMAND_TIMEOUT_MS);
   try {
     await sendCommand('RECORD START', true);
-    recordingStart = await boundary;
-    traceRecording('record_boundary_started', recordingStart);
-    recordingPhase = 'recording';
-    recordStatus.textContent = '正在录制 · 已记录 0 次敲击';
-    refreshControlAvailability();
+    const started = await boundary;
+    recordingStart = started;
+    if (recordingPhase !== 'recording') {
+      traceRecording('record_boundary_started', recordingStart);
+      activateRecording(started);
+    }
   } catch (error) {
     traceRecording('recording_error', {
       phase: 'start',
@@ -520,33 +657,38 @@ async function startPadRecording() {
   }
 }
 
-async function stopPadRecording() {
-  if (recordingPhase !== 'recording') return;
-  traceRecording('record_stop_requested', {
-    eventCount: recordedPadEvents.length,
-  });
-  recordingPhase = 'stopping';
-  recordStatus.textContent = '正在停止录制并核对事件…';
-  refreshControlAvailability();
-  const boundary = recordingBoundaryGate.wait('stopped', COMMAND_TIMEOUT_MS);
+async function processRecordingStop(stop) {
   try {
-    await sendCommand('RECORD STOP', true);
-    const stop = await boundary;
     traceRecording('record_boundary_stopped', stop);
     recordingPhase = 'quantizing';
-    recordStatus.textContent = '已接收实体 Pad 事件，正在近似量化为 16 步…';
+    tempoPhase = 'detecting';
+    recordStatus.textContent = '事件核对完成，正在检测演奏速度…';
+    renderTempo();
+    refreshControlAvailability();
     const verified = verifyRecording(recordedPadEvents, recordingStart, stop);
+    recordedEventSnapshot = verified.events.map((event) => ({ ...event }));
     traceRecording('recording_verified', {
       start: verified.start,
       stop: verified.stop,
       events: verified.events,
     });
-    const result = quantizePadEvents(
-      verified.events,
-      desiredBpm,
-    );
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    tempoDetection = detectTempoCandidates(recordedEventSnapshot, {
+      preferredBpm: deviceBpm,
+    });
+    detectedBpm = tempoDetection.recommendedBpm;
+    selectedBpm = detectedBpm;
+    tempoPhase = 'candidates';
+    const result = quantizePadEvents(recordedEventSnapshot, selectedBpm);
     traceRecording('pattern_quantized', {
-      bpm: desiredBpm,
+      bpm: selectedBpm,
+      tempoStatus: tempoDetection.status,
+      tempoCandidates: tempoDetection.candidates.map((candidate) => ({
+        bpm: candidate.bpm,
+        score: candidate.score,
+        acceptedCount: candidate.acceptedCount,
+        ignoredCount: candidate.ignoredCount,
+      })),
       sampleRateHz: 48000,
       anchorFrame: result.anchorFrame,
       framesPerStep: result.framesPerStep,
@@ -556,25 +698,21 @@ async function stopPadRecording() {
       ignoredCount: result.ignoredCount,
       tracks: instruments.map(({ key, name }) => ({ key, name })),
     });
-    if (result.acceptedCount === 0) {
-      recordingPhase = 'idle';
-      recordStatus.textContent = '本次没有收到有效敲击，已保留原 Pattern。';
-      recordStatus.classList.add('error');
-      refreshControlAvailability();
-      return;
-    }
-    setPattern(result.masks, true);
     patternApproximateQuantization = true;
+    setPattern(result.masks, false, 'hardware_recording');
     const ignoredSuffix = result.ignoredCount > 0
       ? ` · ${result.ignoredCount} 次超出首个小节未写入`
       : '';
-    sequenceSource.textContent = `实体演奏 · 首击对齐第 1 步 · ${desiredBpm} BPM${ignoredSuffix}`;
+    sequenceSource.textContent = `实体演奏 · 自动 Tempo ${selectedBpm} BPM${ignoredSuffix}`;
+    await syncPattern({ throwOnError: true });
     recordingPhase = 'draft';
-    recordStatus.textContent = result.ignoredCount > 0
-      ? `已按首击和当前 BPM 写入 ${result.acceptedCount} 次敲击；${result.ignoredCount} 次超出首个小节。`
-      : `已按首击和当前 BPM 对齐 ${result.acceptedCount} 次敲击；可点击音序格校正。`;
+    const ambiguity = tempoDetection.status === 'ambiguous'
+      ? '存在半速/倍速歧义，可切换候选试听。'
+      : '可切换候选速度试听。';
+    recordStatus.textContent = `检测到约 ${selectedBpm} BPM，已写入 ${result.acceptedCount} 次敲击；${ambiguity}`;
     recordStatus.classList.remove('error');
     recordStatus.classList.add('success');
+    renderTempo();
     refreshControlAvailability();
   } catch (error) {
     traceRecording('recording_error', {
@@ -582,8 +720,55 @@ async function stopPadRecording() {
       type: error?.type || 'unknown',
       message: error?.message || '停止录制失败',
     });
+    tempoPhase = 'error';
+    tempoDetection = null;
+    pattern = [0, 0, 0, 0, 0, 0];
+    renderPattern();
+    renderTempo();
+    void sendCommand('ABORT');
+    setRecordingError(error);
+  }
+}
+
+async function stopPadRecording() {
+  if (recordingPhase !== 'recording') return;
+  traceRecording('record_stop_requested', {
+    eventCount: recordedPadEvents.length,
+  });
+  recordingPhase = 'stopping';
+  recordStatus.textContent = '正在停止录制并核对事件…';
+  renderTempo();
+  refreshControlAvailability();
+  const boundary = recordingBoundaryGate.wait('stopped', COMMAND_TIMEOUT_MS);
+  try {
+    await sendCommand('RECORD STOP', true);
+    const stop = await boundary;
+    await processRecordingStop(stop);
+  } catch (error) {
     recordingBoundaryGate.reject(error);
     try { await boundary; } catch (_) { /* consume rejected boundary */ }
+    void sendCommand('ABORT');
+    setRecordingError(error);
+  }
+}
+
+async function selectTempoCandidate(bpm) {
+  if (!tempoDetection || patternInFlight || state.running) return;
+  const candidate = tempoDetection.candidates.find((item) => item.bpm === bpm);
+  if (!candidate) return;
+  selectedBpm = candidate.bpm;
+  patternApproximateQuantization = true;
+  const result = quantizePadEvents(recordedEventSnapshot, selectedBpm);
+  setPattern(result.masks, false, 'tempo_candidate');
+  sequenceSource.textContent = `实体演奏 · Tempo 候选 ${selectedBpm} BPM · ${result.acceptedCount} 次落入首小节`;
+  renderTempo();
+  renderTempoCandidates();
+  try {
+    await syncPattern({ throwOnError: true });
+    recordStatus.textContent = `已切换到 ${selectedBpm} BPM，并按原始事件重新量化。`;
+    recordStatus.classList.remove('error');
+    recordStatus.classList.add('success');
+  } catch (error) {
     setRecordingError(error);
   }
 }
@@ -592,7 +777,7 @@ function saveCurrentPattern() {
   try {
     const serialized = serializeSavedPattern({
       name: patternName.value,
-      bpm: desiredBpm,
+      bpm: selectedBpm,
       masks: pattern,
       approximateQuantization: patternApproximateQuantization,
     });
@@ -616,10 +801,14 @@ function restoreSavedPattern() {
     if (!serialized) return;
     const saved = parseSavedPattern(serialized);
     pattern = saved.masks;
-    desiredBpm = saved.bpm;
+    selectedBpm = saved.bpm;
+    detectedBpm = null;
+    tempoDetection = null;
+    tempoPhase = 'manual';
     patternName.value = saved.name;
     patternApproximateQuantization = saved.approximateQuantization;
     patternDirty = true;
+    markPatternChanged('saved_restore');
     storageDirty = false;
     sequenceSource.textContent = `已保存 · ${saved.name} · ${saved.bpm} BPM`;
     saveStatus.textContent = '已恢复浏览器中保存的 Pattern';
@@ -653,13 +842,15 @@ function renderExplanation(payload) {
   explanationSuggestion.textContent = `修改建议：${explanation.suggestion}`;
   explanationLimitations.textContent = `判断边界：${explanation.limitations}`;
   explanationStale.hidden = (
-    explanationSourceFingerprint === patternFingerprint(pattern, desiredBpm)
+    explanationSourceRevision === patternRevisions.currentRevision
   );
 }
 
 async function explainCurrentPattern() {
-  const sourceMasks = [...pattern];
-  const sourceBpm = desiredBpm;
+  const requestId = `explain-${++explanationRequestSequence}`;
+  const request = patternRevisions.beginAiRequest(requestId);
+  const sourceMasks = request.snapshot.masks;
+  const sourceBpm = request.snapshot.bpm;
   explanationLoading = true;
   recordStatus.textContent = '已读取六轨 16 步 Pattern，正在提取节奏结构并请求 AI 解释…';
   recordStatus.classList.remove('error', 'success');
@@ -669,13 +860,17 @@ async function explainCurrentPattern() {
       (...args) => fetch(...args),
       sourceMasks,
       sourceBpm,
-      patternApproximateQuantization,
+      request.snapshot.approximateQuantization,
     );
+    const resolution = patternRevisions.resolveAiRequest(request);
+    if (!resolution.accepted) return;
     explanationPayload = payload;
-    explanationSourceFingerprint = patternFingerprint(sourceMasks, sourceBpm);
+    explanationSourceRevision = request.sourceRevision;
     renderExplanation(payload);
     const repaired = payload.repairAttempted ? ' · 首答校验失败后修复一次' : '';
-    recordStatus.textContent = `AI 解释完成 · ${payload.latencyMs?.total ?? '—'} ms${repaired}`;
+    recordStatus.textContent = resolution.stale
+      ? `AI 解释完成，但对应 v${request.sourceRevision}；当前已是 v${resolution.currentRevision}。`
+      : `AI 解释完成 · Pattern v${request.sourceRevision} · ${payload.latencyMs?.total ?? '—'} ms${repaired}`;
     recordStatus.classList.add('success');
   } catch (error) {
     const normalized = error instanceof PatternExplanationError
@@ -692,9 +887,8 @@ async function explainCurrentPattern() {
 function render(next) {
   const previousPadEvent = state.padEvent;
   state = { ...state, ...next };
-  const displayedBpm = patternDirty ? desiredBpm : state.bpm;
-  bpmValue.textContent = displayedBpm;
-  barDuration.innerHTML = `<strong>${(240 / displayedBpm).toFixed(2)} 秒</strong> / 小节`;
+  deviceBpm = Number(state.bpm) || deviceBpm;
+  renderTempo();
   toggle.textContent = state.running ? '停止' : '开始';
   toggle.classList.toggle('running', state.running);
   toggle.setAttribute('aria-pressed', String(state.running));
@@ -736,6 +930,18 @@ function handleLine(line) {
     const message = JSON.parse(line);
     if (message.type === 'state') {
       applyCapabilities(message);
+      const messageBpm = Number(message.bpm) || deviceBpm;
+      deviceBpm = messageBpm;
+      if (message.running && messageBpm !== selectedBpm && !recordingLocksControls()) {
+        selectedBpm = messageBpm;
+        markPatternChanged('tempo_live');
+        patternDirty = false;
+        patternRevisions.acknowledge({
+          revision: patternRevisions.currentRevision,
+          bpm: selectedBpm,
+          masks: pattern,
+        });
+      }
       if (
         Array.isArray(message.pattern)
         && message.pattern.length === 6
@@ -743,18 +949,37 @@ function handleLine(line) {
         && !patternInFlight
         && aiController?.phase !== 'applying'
       ) {
-        pattern = message.pattern.map((value) => Number(value) & 0xffff);
-        patternApproximateQuantization = false;
-        desiredBpm = Number(message.bpm) || desiredBpm;
+        const incomingPattern = message.pattern.map((value) => Number(value) & 0xffff);
+        const deviceDiffers = messageBpm !== selectedBpm || incomingPattern.some(
+          (value, index) => value !== pattern[index],
+        );
+        if (deviceDiffers) {
+          pattern = incomingPattern;
+          patternApproximateQuantization = false;
+          selectedBpm = messageBpm;
+          markPatternChanged('device_restore');
+          storageDirty = false;
+          patternDirty = false;
+        }
+        patternRevisions.acknowledge({
+          revision: patternRevisions.currentRevision,
+          bpm: selectedBpm,
+          masks: pattern,
+        });
         renderPattern();
       }
       render(message);
       traceDeviceState(message);
       return;
     }
-    if (message.type === 'ack' && message.command === 'PATTERN') {
-      traceRecording('pattern_ack_received', { command: 'PATTERN' });
-      patternAckGate.acknowledge();
+    if (message.type === 'ack' && message.command === 'COMMIT') {
+      traceRecording('pattern_ack_received', {
+        command: 'COMMIT',
+        revision: message.revision,
+        bpm: message.bpm,
+        pattern: message.pattern,
+      });
+      patternAckGate.acknowledge(message);
       return;
     }
     if (message.type === 'pad') {
@@ -783,7 +1008,30 @@ function handleLine(line) {
       return;
     }
     if (message.type === 'record') {
-      recordingBoundaryGate.resolve(message);
+      try {
+        const boundary = validateRecordBoundary(message, message.phase);
+        if (boundary.phase === 'started' && recordingPhase === 'starting') {
+          traceRecording('record_boundary_started', boundary);
+          activateRecording(boundary);
+        }
+        if (recordingBoundaryGate.resolve(message)) return;
+        if (boundary.phase === 'started' && boundary.origin === 's8') {
+          createRecordingTraceSession();
+          traceRecording('record_start_requested', { origin: 's8' });
+          traceRecording('record_boundary_started', boundary);
+          activateRecording(boundary);
+        } else if (
+          boundary.phase === 'stopped'
+          && boundary.origin === 's8'
+          && recordingPhase === 'recording'
+        ) {
+          recordingPhase = 'stopping';
+          recordStatus.textContent = 'S8 已停止录制，正在核对事件…';
+          void processRecordingStop(boundary);
+        }
+      } catch (error) {
+        setRecordingError(error);
+      }
       return;
     }
     if (message.type === 'error') {
@@ -836,7 +1084,9 @@ async function readSerial(port) {
       patternInFlight = false;
       patternQueued = patternDirty;
       rejectPendingTransactions(new AiPatternError('transport_error', '串口连接已中断。'));
-      setProtocolFeatures(false, false, false, '连接设备后同步');
+      captureReadySent = false;
+      patternRevisions.markDisconnected();
+      setProtocolFeatures(false, false, false, false, false, '连接设备后同步');
       setConnection('offline', '重新连接');
     }
   }
@@ -864,6 +1114,9 @@ async function disconnectSerial(label = '连接设备') {
   if (!serialPort) return;
   closing = true;
   const port = serialPort;
+  if (writer && captureReadySent) {
+    try { await sendCommand('CAPTURE READY 0', true); } catch (_) { /* disconnect continues */ }
+  }
   rejectPendingTransactions(new AiPatternError('transport_error', '串口已断开。'));
   if (reader) {
     try { await reader.cancel(); } catch (_) { /* already cancelled */ }
@@ -881,8 +1134,10 @@ async function disconnectSerial(label = '连接设备') {
   lineBuffer = '';
   patternInFlight = false;
   patternQueued = patternDirty;
+  captureReadySent = false;
+  patternRevisions.markDisconnected();
   closing = false;
-  setProtocolFeatures(false, false, false, '连接设备后同步');
+  setProtocolFeatures(false, false, false, false, false, '连接设备后同步');
   setConnection('offline', label);
 }
 
@@ -892,7 +1147,8 @@ async function connectSerial() {
     return;
   }
   try {
-    setProtocolFeatures(false, false, false, '正在确认固件能力…');
+    captureReadySent = false;
+    setProtocolFeatures(false, false, false, false, false, '正在确认固件能力…');
     setConnection('offline', '选择串口…');
     const port = await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x303a }] });
     await port.open({ baudRate: 115200, bufferSize: 1024 });
@@ -904,7 +1160,7 @@ async function connectSerial() {
   } catch (error) {
     serialPort = null;
     writer = null;
-    setProtocolFeatures(false, false, false, '连接设备后同步');
+    setProtocolFeatures(false, false, false, false, false, '连接设备后同步');
     setConnection(
       error.name === 'NotFoundError' ? 'offline' : 'error',
       error.name === 'NotFoundError' ? '连接设备' : '连接失败 · 重试',
@@ -916,13 +1172,16 @@ async function applyCandidate(candidate) {
   const masks = patternToMasks(candidate);
   pattern = masks;
   patternApproximateQuantization = false;
-  desiredBpm = candidate.bpm;
+  selectedBpm = candidate.bpm;
+  detectedBpm = null;
+  tempoDetection = null;
+  tempoPhase = 'manual';
   patternDirty = true;
   patternQueued = false;
   lastApplyHardwareConfirmed = false;
   sequenceSource.textContent = `AI · ${candidate.name} · ${candidate.style} · ${candidate.bpm} BPM`;
   renderPattern();
-  markPatternChanged();
+  markPatternChanged('ai_generated');
   render(state);
   refreshControlAvailability();
 
@@ -930,8 +1189,8 @@ async function applyCandidate(candidate) {
     setPatternStatus('已填入音序器，连接设备后自动同步');
     return;
   }
-  if (!sequencerAvailable) {
-    throw new AiPatternError('protocol_error', '已填入音序器，但当前固件不支持 PATTERN 协议。');
+  if (!sequencerAvailable || !revisionCommitAvailable) {
+    throw new AiPatternError('protocol_error', '已填入音序器，但当前固件不支持 COMMIT 协议。');
   }
   await syncPattern({ throwOnError: true });
   lastApplyHardwareConfirmed = true;
@@ -947,10 +1206,9 @@ async function togglePlayback() {
   }
   traceRecording('playback_toggle_requested', {
     currentlyRunning: Boolean(state.running),
-    bpm: desiredBpm,
+    bpm: selectedBpm,
     masks: pattern.map((value) => Number(value) & 0xffff),
-    metronomeClickExpectedAfterToggle: !state.running,
-    metronomeClickQuarterSteps: [1, 5, 9, 13],
+    metronomeClickExpectedAfterToggle: false,
   });
   await sendCommand('TOGGLE');
 }
@@ -984,7 +1242,7 @@ function renderAiState(snapshot) {
     }
   } else if (snapshot.phase === 'applying') {
     aiStatus.textContent = serialPort
-      ? '正在填入音序器、设置 BPM，并等待硬件 PATTERN ACK…'
+      ? '正在填入音序器、设置 BPM，并等待硬件 COMMIT ACK…'
       : '正在填入现有 16 步音序器…';
   } else if (snapshot.phase === 'error') {
     aiResult.hidden = true;
@@ -1006,20 +1264,21 @@ restoreSavedPattern();
 connectDevice.addEventListener('click', connectSerial);
 toggle.addEventListener('click', () => { void togglePlayback(); });
 slower.addEventListener('click', () => {
-  desiredBpm = Math.max(40, state.bpm - 1);
-  markPatternChanged();
-  void sendCommand(`BPM ${desiredBpm}`);
+  if (!state.running) return;
+  void sendCommand(`BPM ${Math.max(40, deviceBpm - 1)}`);
 });
 faster.addEventListener('click', () => {
-  desiredBpm = Math.min(240, state.bpm + 1);
-  markPatternChanged();
-  void sendCommand(`BPM ${desiredBpm}`);
+  if (!state.running) return;
+  void sendCommand(`BPM ${Math.min(240, deviceBpm + 1)}`);
 });
 clearPattern.addEventListener('click', () => {
   patternApproximateQuantization = false;
-  setPattern([0, 0, 0, 0, 0, 0]);
+  tempoDetection = null;
+  detectedBpm = null;
+  tempoPhase = 'manual';
+  setPattern([0, 0, 0, 0, 0, 0], true, 'manual_clear');
 });
-patternName.addEventListener('input', markPatternChanged);
+patternName.addEventListener('input', markPatternNameChanged);
 recordPattern.addEventListener('click', () => {
   if (recordingPhase === 'recording') void stopPadRecording();
   else void startPadRecording();
@@ -1050,6 +1309,6 @@ if ('serial' in navigator) {
   connectDevice.disabled = true;
   setConnection('error', '浏览器不支持 Web Serial');
 }
-setProtocolFeatures(false, false, false, '连接设备后同步');
+setProtocolFeatures(false, false, false, false, false, '连接设备后同步');
 renderPattern();
 render(state);

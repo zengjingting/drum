@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "board_pins.h"
+#include "capture_controller.h"
 #include "driver/usb_serial_jtag.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -19,13 +20,23 @@
 #define COMMAND_BUFFER_SIZE 96
 #define STATE_JSON_BUFFER_SIZE 512
 #define PAD_EVENT_QUEUE_LENGTH 64
-#define PROTOCOL_VERSION 2
+#define PROTOCOL_VERSION 3
 
 static const char *TAG = "usb_control";
 static QueueHandle_t s_state_queue;
 static QueueHandle_t s_pad_event_queue;
-static bool s_recording_stream;
+static bool s_streaming_pad_events;
 static uint64_t s_recording_start_frame;
+
+static const char *capture_origin_name(capture_origin_t origin)
+{
+    switch (origin) {
+    case CAPTURE_ORIGIN_WEB: return "web";
+    case CAPTURE_ORIGIN_S8: return "s8";
+    case CAPTURE_ORIGIN_SYSTEM: return "system";
+    default: return "unknown";
+    }
+}
 
 static void write_all(const char *text)
 {
@@ -54,15 +65,20 @@ static void send_state(metronome_state_t state)
     int length = snprintf(response, sizeof(response),
                           "{\"type\":\"state\",\"bpm\":%u,\"running\":%s,"
                           "\"protocolVersion\":%u,"
-                          "\"capabilities\":[\"pattern\",\"trigger\",\"sequencer\",\"padEvents\"],"
+                          "\"capabilities\":[\"pattern\",\"trigger\",\"sequencer\",\"padEvents\",\"hardwareCaptureButton\",\"revisionCommit\"],"
+                          "\"captureState\":\"%s\",\"captureReady\":%s,"
                           "\"accent\":%s,\"beat\":%" PRIu64 ","
                           "\"ppqnTick\":%" PRIu64 ",\"uiPosition\":%u,"
                           "\"ledPosition\":%u,\"sequenceStep\":%u,"
                           "\"lastPad\":%u,\"padEvent\":%" PRIu32 ","
+                          "\"patternRevision\":%" PRIu32 ","
                           "\"pattern\":[%u,%u,%u,%u,%u,%u]}\n",
                           state.bpm,
                           state.running ? "true" : "false",
                           PROTOCOL_VERSION,
+                          capture_controller_state_name(
+                              capture_controller_get_state()),
+                          capture_controller_is_ready() ? "true" : "false",
                           state.accent ? "true" : "false",
                           state.beat_index,
                           state.ppqn_tick,
@@ -71,6 +87,7 @@ static void send_state(metronome_state_t state)
                           state.sequence_step,
                           state.last_pad,
                           state.pad_event,
+                          state.pattern_revision,
                           state.pattern[0], state.pattern[1], state.pattern[2],
                           state.pattern[3], state.pattern[4], state.pattern[5]);
     if (length < 0 || (size_t)length >= sizeof(response)) {
@@ -94,14 +111,17 @@ static void send_pad_event(metronome_pad_event_t event)
 }
 
 static void send_record_boundary(const char *phase,
+                                 capture_origin_t origin,
                                  metronome_capture_marker_t marker)
 {
     char response[192];
     int length = snprintf(response, sizeof(response),
                           "{\"type\":\"record\",\"phase\":\"%s\","
+                          "\"origin\":\"%s\","
                           "\"frame\":%" PRIu64 ",\"lastEvent\":%" PRIu32 ","
                           "\"dropped\":%" PRIu32 "}\n",
-                          phase, marker.frame, marker.last_pad_event,
+                          phase, capture_origin_name(origin), marker.frame,
+                          marker.last_pad_event,
                           marker.dropped_pad_events);
     if (length > 0 && (size_t)length < sizeof(response)) {
         write_all(response);
@@ -112,7 +132,7 @@ static void drain_pad_events(uint64_t end_frame)
 {
     metronome_pad_event_t event;
     while (xQueueReceive(s_pad_event_queue, &event, 0) == pdTRUE) {
-        if (s_recording_stream &&
+        if (s_streaming_pad_events &&
             event.frame >= s_recording_start_frame &&
             event.frame <= end_frame) {
             send_pad_event(event);
@@ -126,6 +146,21 @@ static void send_ack(const char *command)
     int length = snprintf(response, sizeof(response),
                           "{\"type\":\"ack\",\"command\":\"%s\"}\n",
                           command);
+    if (length > 0 && (size_t)length < sizeof(response)) {
+        write_all(response);
+    }
+}
+
+static void send_commit_ack(metronome_state_t state)
+{
+    char response[224];
+    int length = snprintf(response, sizeof(response),
+                          "{\"type\":\"ack\",\"command\":\"COMMIT\","
+                          "\"revision\":%" PRIu32 ",\"bpm\":%u,"
+                          "\"pattern\":[%u,%u,%u,%u,%u,%u]}\n",
+                          state.pattern_revision, state.bpm,
+                          state.pattern[0], state.pattern[1], state.pattern[2],
+                          state.pattern[3], state.pattern[4], state.pattern[5]);
     if (length > 0 && (size_t)length < sizeof(response)) {
         write_all(response);
     }
@@ -150,41 +185,41 @@ static void handle_command(char *command)
     }
 
     if (strcmp(command, "TOGGLE") == 0) {
+        if (capture_controller_controls_locked()) {
+            send_error("Playback is locked during capture processing");
+            return;
+        }
         metronome_app_toggle();
         return;
     }
 
-    if (strcmp(command, "RECORD START") == 0) {
-        if (s_recording_stream) {
-            send_error("Recording is already active");
-            return;
-        }
+    if (strcmp(command, "CAPTURE READY 1") == 0) {
+        capture_controller_set_ready(true);
+        send_ack("CAPTURE READY");
+        return;
+    }
+
+    if (strcmp(command, "CAPTURE READY 0") == 0 ||
+        strcmp(command, "ABORT") == 0) {
+        capture_controller_set_ready(false);
+        capture_controller_abort();
+        s_streaming_pad_events = false;
         xQueueReset(s_pad_event_queue);
-        metronome_capture_marker_t marker;
-        if (!metronome_app_capture_marker(&marker)) {
+        send_ack(strcmp(command, "ABORT") == 0 ? "ABORT" : "CAPTURE READY");
+        return;
+    }
+
+    if (strcmp(command, "RECORD START") == 0) {
+        if (!capture_controller_start(CAPTURE_ORIGIN_WEB)) {
             send_error("Recording start could not be queued");
-            return;
         }
-        s_recording_start_frame = marker.frame;
-        s_recording_stream = true;
-        send_record_boundary("started", marker);
         return;
     }
 
     if (strcmp(command, "RECORD STOP") == 0) {
-        if (!s_recording_stream) {
-            send_error("Recording is not active");
-            return;
-        }
-        metronome_capture_marker_t marker;
-        if (!metronome_app_capture_marker(&marker)) {
+        if (!capture_controller_stop(CAPTURE_ORIGIN_WEB)) {
             send_error("Recording stop could not be queued");
-            return;
         }
-        drain_pad_events(marker.frame);
-        s_recording_stream = false;
-        xQueueReset(s_pad_event_queue);
-        send_record_boundary("stopped", marker);
         return;
     }
 
@@ -193,6 +228,11 @@ static void handle_command(char *command)
         long bpm = strtol(command + 4, &end, 10);
         if (end != command + 4 && *end == '\0' &&
             bpm >= METRONOME_MIN_BPM && bpm <= METRONOME_MAX_BPM) {
+            if (capture_controller_controls_locked() ||
+                !metronome_app_get_state().running) {
+                send_error("BPM adjustment is only available during playback");
+                return;
+            }
             metronome_app_set_bpm((uint16_t)bpm);
             return;
         }
@@ -204,6 +244,45 @@ static void handle_command(char *command)
     unsigned mask = 0;
     char trailing = '\0';
     unsigned values[METRONOME_DRUM_TRACK_COUNT] = {0};
+    uint32_t revision = 0;
+    unsigned commit_bpm = 0;
+    int commit_fields = sscanf(command,
+        "COMMIT %" SCNu32 " %u %u %u %u %u %u %u %c",
+        &revision, &commit_bpm,
+        &values[0], &values[1], &values[2],
+        &values[3], &values[4], &values[5], &trailing);
+    if (commit_fields == METRONOME_DRUM_TRACK_COUNT + 2) {
+        uint16_t pattern[METRONOME_DRUM_TRACK_COUNT];
+        if (commit_bpm < METRONOME_MIN_BPM ||
+            commit_bpm > METRONOME_MAX_BPM) {
+            send_error("COMMIT BPM must be an integer from 40 to 240");
+            return;
+        }
+        for (size_t index = 0; index < METRONOME_DRUM_TRACK_COUNT; ++index) {
+            if (values[index] > UINT16_MAX) {
+                send_error("COMMIT pattern values must be 0-65535");
+                return;
+            }
+            pattern[index] = (uint16_t)values[index];
+        }
+        if (!capture_controller_begin_sync()) {
+            send_error("COMMIT is not safe in the current device state");
+            return;
+        }
+        const bool committed = metronome_app_commit_pattern(
+            revision, (uint16_t)commit_bpm, pattern);
+        capture_controller_finish_sync(committed);
+        if (committed) {
+            send_commit_ack(metronome_app_get_state());
+        } else {
+            send_error("COMMIT could not be applied");
+        }
+        return;
+    }
+    if (strncmp(command, "COMMIT", 6) == 0) {
+        send_error("COMMIT needs revision, BPM, and exactly 6 pattern values");
+        return;
+    }
     int pattern_fields = sscanf(command,
         "PATTERN %u %u %u %u %u %u %c",
         &values[0], &values[1], &values[2],
@@ -258,8 +337,18 @@ static void usb_control_task(void *arg)
     size_t command_length = 0;
     uint8_t incoming[64];
     metronome_state_t state;
+    bool was_connected = false;
 
     for (;;) {
+        const bool connected = usb_serial_jtag_is_connected();
+        if (!connected && was_connected) {
+            capture_controller_set_ready(false);
+            capture_controller_abort();
+            s_streaming_pad_events = false;
+            xQueueReset(s_pad_event_queue);
+        }
+        was_connected = connected;
+
         int received = usb_serial_jtag_read_bytes(incoming, sizeof(incoming),
                                                    pdMS_TO_TICKS(10));
         for (int index = 0; index < received; ++index) {
@@ -284,9 +373,25 @@ static void usb_control_task(void *arg)
         while (xQueueReceive(s_state_queue, &state, 0) == pdTRUE) {
             send_state(state);
         }
-        if (s_recording_stream) {
+        capture_event_t capture_event;
+        while (capture_controller_receive_event(&capture_event, 0)) {
+            if (capture_event.started) {
+                s_recording_start_frame = capture_event.marker.frame;
+                s_streaming_pad_events = true;
+                send_record_boundary("started", capture_event.origin,
+                                     capture_event.marker);
+                drain_pad_events(UINT64_MAX);
+            } else {
+                drain_pad_events(capture_event.marker.frame);
+                s_streaming_pad_events = false;
+                send_record_boundary("stopped", capture_event.origin,
+                                     capture_event.marker);
+                xQueueReset(s_pad_event_queue);
+            }
+        }
+        if (s_streaming_pad_events) {
             drain_pad_events(UINT64_MAX);
-        } else {
+        } else if (capture_controller_get_state() != CAPTURE_STATE_RECORDING) {
             xQueueReset(s_pad_event_queue);
         }
     }
@@ -325,7 +430,7 @@ esp_err_t usb_serial_control_start(void)
 
     ESP_LOGI(TAG,
              "USB protocol v%d ready: STATE, TOGGLE, BPM, PATTERN, MASK, "
-             "TRIGGER, RECORD",
+             "TRIGGER, RECORD, COMMIT, CAPTURE READY, ABORT",
              PROTOCOL_VERSION);
     return ESP_OK;
 }

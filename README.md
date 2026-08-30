@@ -9,22 +9,22 @@
 - 麦克风不初始化；其 BCLK/WS 保持低，DATA IN 保持 disabled/floating。
 - 扬声器 I2S：BCLK/WS/DOUT=`GPIO14/13/15`，48 kHz、16-bit、立体声重复采样。节拍停止时仍连续发送静音，I2S 主时钟不会因为停止或网页断开而消失。
 - 96 PPQN 使用整数相位累计，不按 RTOS tick 延时推拍；默认 120 BPM，可调 40–240 BPM。
-- 第 1、5、9…拍为 1760 Hz 强拍；其余拍为 1120 Hz 普通拍，非发声区间输出静音。
+- 节拍推进仍保留强弱拍与 96 PPQN 状态，但不再混入额外的电子 click；扬声器只播放实体 Pad 或 16 步 Pattern 对应的六轨 PCM，避免出现音序格之外的“第三种声音”。
 - S1、S2、S4–S7 是当前启用的低有效独立鼓垫，4 ms 消抖；S3 因硬件故障暂不触发，原 S3 闭镲迁移到 S7。按键通过同一条连续 I2S 音频链直接触发板载 PCM，即使节拍器处于停止状态也能演奏。
 - 网页同步显示当前六个实体按键与音色的映射；实体按钮或网页试听触发时，对应音色卡片会高亮反馈。
 - 网页提供六轨、每轨 16 步的可编辑音序器。每步是 1/16 音符，固件每 24 个 PPQN tick 推进一步，并直接在 I2S 音频任务中触发音色，因此会跟随 40–240 BPM 的实时变化而不依赖浏览器计时。
 - 网页支持用中文描述生成 `easyinput.pattern.v1` 鼓点：本地代理调用非思考模式的 `deepseek-v4-flash`，复用评测 Harness 做严格结构校验、一次定向修复和 Mask 转换。生成只产生候选；点击“应用”后才填入已有的 16 步音序器，并在设备在线时等待 `PATTERN` ACK。播放仍由原有“开始/停止”按钮独立控制，应用后的手动改格继续实时同步硬件。
-- 网页支持录制实体 Pad 演奏：固件将每次物理触发作为带连续事件号和 I2S frame 的独立 USB 消息发送，网页在用户停止后才将整段演奏近似量化到唯一的六轨 16 步音序器。录制过程中不实时改格；快速事件漏失或队列溢出会阻断量化，而不是生成一份看似完整的 Pattern。
+- 网页支持录制实体 Pad 演奏：网页或 S8/GPIO48 进入同一录制事务，固件先清空当前工作 Pattern，再将每次物理触发作为带连续事件号和 I2S frame 的独立 USB 消息发送。停止后网页核对事件完整性，以第一下有效敲击为第 1 步，本地检测 Tempo 候选并量化到唯一的六轨 16 步音序器；录制过程中不实时改格，事件漏失会阻断量化。
 - 当前 Pattern 可保存到浏览器本地并在刷新后恢复。用户可以让 DeepSeek 解释当前节奏的风格倾向；后端先提取确定性节奏特征，再要求模型用结构化 Schema 返回风格、置信度、引用实际音轨与步数的依据、修改建议和判断限制。模型只读取 Pattern，不读取或声称读取音频。
 - 128 声部非抢占混音允许多键和同键快速重触发自然叠加；新触发不会偷取或截断已经播放的声音。混音输出带 64-sample 尾部淡出和整数软限幅。
 - 针对实板小扬声器的频响，S1 已改用 ccMixter 的标准原声 Kick，PCM 预降 6 dB 并使用 unity 运行增益；S2 与 S7 已改用 Virtuosity Drums 的真实原声鼓录音：S2 是中等力度的中心军鼓并预降 3 dB，S7 是较暗的低保真麦克风闭镲，板载峰值比上一版明显降低；S4 采用 EasyInput Beatbox 的 40% 乐器电平开镲，并根据新自然鼓组的实板对比再降 4.5 dB；S5 采用其 88% 乐器电平与保守限幅的短尾 Clap，累计降低 10.5 dB；S6 采用其 82% 乐器电平与保守限幅的短尾 Rim，并预降 3 dB。总混音仍经软限幅，避免数字硬削波。
-- 编码器 A/B/按压=`GPIO17/16/18`：完成一次正交周期并回到稳定卡点后调 1 BPM，按压切换开始/停止，25 ms 按压消抖。
+- S8=`GPIO48` 是独立录制键；只有网页完成协议握手并声明录制就绪后，按一次开始、再按一次停止。编码器 A/B/按压=`GPIO17/16/18`：录制、检测和同步期间锁定；停止状态下按压开始回放，回放中按压停止，只有回放中旋转才按每个稳定卡点调 1 BPM。
 - 5 颗 WS2812 通过 GPIO12 显示 `0→1→2→3→4→3→2→1` 往返光点；事件来自 I2S 样本累计。
 - ESP32-S3 原生 USB Serial/JTAG 提供网页控制通道，不再创建 Wi-Fi AP，也不需要电脑切换网络。
 - 本地网页通过 Web Serial 发送 `STATE`、`TOGGLE`、`BPM <40-240>`，固件按行返回 JSON 状态；四方块显示 `0→1→2→3→2→1` 往返节拍。
 - USB 未连接或网页关闭不会停止旋钮、扬声器、LED 或 I2S，硬件可完全独立工作。
 
-冷启动后的默认状态是 **120 BPM、停止**，避免上电后扬声器突然发声；按一次旋钮开始。
+冷启动后的默认状态是 **120 BPM、停止**，避免上电后扬声器突然发声；在普通待机/回放状态按一次编码器开始。
 
 ## 板载鼓音色
 
@@ -92,23 +92,24 @@ USB 行协议如下：
 
 ```text
 网页 -> 固件: STATE\n
-固件 -> 网页: {"type":"state","protocolVersion":2,"capabilities":["pattern","trigger","sequencer","padEvents"],...}\n
+固件 -> 网页: {"type":"state","protocolVersion":3,"capabilities":["pattern","trigger","sequencer","padEvents","hardwareCaptureButton","revisionCommit"],...}\n
 网页 -> 固件: TOGGLE\n
 网页 -> 固件: BPM 120\n
-网页 -> 固件: PATTERN 4369 4112 21845 0 0 32768\n
-固件 -> 网页: {"type":"ack","command":"PATTERN"}\n
+网页 -> 固件: COMMIT 12 120 4369 4112 21845 0 0 32768\n
+固件 -> 网页: {"type":"ack","command":"COMMIT","revision":12,"bpm":120,"pattern":[4369,4112,21845,0,0,32768]}\n
 网页 -> 固件: TRIGGER 1\n         # 试听 S1
 固件 -> 网页: {"type":"state","bpm":120,"running":true,"sequenceStep":0,"pattern":[4369,0,0,0,0,0],...}\n
+网页 -> 固件: CAPTURE READY 1\n
 网页 -> 固件: RECORD START\n
-固件 -> 网页: {"type":"record","phase":"started","frame":480000,"lastEvent":10,"dropped":0}\n
+固件 -> 网页: {"type":"record","phase":"started","origin":"web","frame":480000,"lastEvent":10,"dropped":0}\n
 固件 -> 网页: {"type":"pad","event":11,"track":0,"frame":486000,"source":"hardware"}\n
 网页 -> 固件: RECORD STOP\n
-固件 -> 网页: {"type":"record","phase":"stopped","frame":576000,"lastEvent":11,"dropped":0}\n
+固件 -> 网页: {"type":"record","phase":"stopped","origin":"web","frame":576000,"lastEvent":11,"dropped":0}\n
 ```
 
-协议 v2 的 `PATTERN` 会将六轨 16-bit 掩码作为一个音频任务命令原子更新；音频任务完成应用并发布新状态后，USB 才返回 ACK。固件仍接受旧 `MASK <track> <mask>` 作为兼容入口，但当前网页不再逐轨发送。网页只有在 `STATE` 声明 `pattern`、`trigger`、`sequencer` 能力后才启用相应控件，并在收到 `PATTERN` ACK 后标记同步完成。协议错误显示在音序器区域，不会被误判为 USB 断线。
+协议 v3 的 `COMMIT` 会把 revision、BPM 与六轨 16-bit Mask 作为一个音频任务命令原子更新；网页只接受与当前不可变快照完全一致的 ACK，旧 ACK 会被忽略。固件仍接受旧 `PATTERN` / `MASK` 作为兼容入口，但当前网页只用 `COMMIT`。协议错误显示在音序器区域，不会被误判为 USB 断线。
 
-`padEvents` 是协议 v2 的向后兼容能力扩展。网页只有看到该 capability 才启用录制。`RECORD START/STOP` 的边界与实体 Pad 消息都来自同一个连续 I2S frame 时钟；每次物理触发进入独立 FIFO，而不是复用只保留最新状态的覆盖队列。网页会核对起止事件号和累计丢失数，发现缺口时保留原 Pattern 并要求重录。网页试听 `TRIGGER` 和音序器自动播放不会进入实体录制。
+录制要求同时声明 `padEvents`、`hardwareCaptureButton` 和 `revisionCommit`。`CAPTURE READY` 防止网页离线时 S8误清空 Pattern；`RECORD START/STOP` 的边界与 Pad 消息来自同一个连续 I2S frame 时钟，并携带 `web` 或 `s8` 来源。每次物理触发进入独立 FIFO，网页核对起止事件号和累计丢失数，发现缺口就保持空白并要求重录。网页试听 `TRIGGER` 和音序器自动播放不会进入实体录制。
 
 ### AI 鼓点生成
 
@@ -124,15 +125,15 @@ P0 的产品决策、交互状态、失败边界与验收口径记录在 `docs/a
 
 ### 实体演奏录制与 AI 解释
 
-操作顺序是：连接支持 `padEvents` 的固件 → 确认音序器处于停止状态 → 点击“开始录制” → 在实体 Pad 上演奏 → 点击“停止录制” → 结果一次性进入现有音序器 → 手动校正、保存、AI 解释或点击“开始”播放。
+操作顺序是：连接协议 v3 固件 → 确认音序器停止 → 点击网页“开始录制”或按 S8 → 自由演奏 → 再次点击或按 S8停止 → 本地检测 Tempo并展示推荐/半速/倍速候选 → 结果进入现有音序器并以 revision同步 → 手动校正、保存、AI解释或点击“开始”播放。
 
-量化以第一次实体 Pad 触发作为第 1 步时间原点，后续事件依据当前 BPM 和 48 kHz I2S frame 吸附到最近的 1/16 音符。点击“开始录制”和“停止录制”只负责划定事件采集范围，不参与节奏拉伸；超出首个单小节的事件不会被挤入第 16 步。同一音轨落在同一格的事件会合并，不同音轨可以共享一格。该方案仍不保留力度、Swing 或微小时序，也不包装成精准转录。
+量化以第一次实体 Pad 触发作为第 1 步时间原点，后续事件按所选 Tempo与 48 kHz I2S frame吸附到最近的 1/16 音符。Tempo由本地确定性算法估计，不调用 LLM；候选变化会从不可变原始事件重新量化。超出首个单小节的事件不会挤入第 16 步，同轨同格会合并，不同音轨可共享一格。该方案仍不保留力度、Swing或微时序，也不包装成精准转录或音频理解。
 
 真机排障期间，网页会把录制边界、原始 Pad 事件、逐事件量化落格、下发 Mask、ACK 和播放步写入本机 `.diagnostics/recording-trace.ndjson`。该目录不会进入 Git，诊断不记录自然语言、模型输出、密钥或音频，写入失败也不会影响硬件链路。
 
 AI 解释请求使用 `easyinput.pattern.explanation.v1`，解释证据引用的音轨与步数必须在当前 Pattern 中真实触发，否则后端最多定向修复一次，仍失败就拒绝展示。修改 Pattern 或 BPM 后，旧解释会标记为对应修改前版本。DeepSeek 或网络失败不影响录制结果、编辑、保存与硬件播放。
 
-已实现的历史 MVP、真机记录和固定 BPM量化证据保留在 `docs/pad-recording-ai-explanation-mvp-decisions.md`。后续开发以 `docs/pad-recording-auto-tempo-ai-explanation-product-spec.md` 为产品合同，覆盖 S8录制、编码器回放与调速、自动 Tempo候选、Pattern revision以及 AI解释最新版本。
+已实现的历史 MVP、真机记录和固定 BPM量化证据保留在 `docs/pad-recording-ai-explanation-mvp-decisions.md`。当前 S8录制、编码器职责、自动 Tempo候选、Pattern revision和 AI解释最新版本的代码状态与尚待真机验收项记录在 `docs/pad-recording-auto-tempo-ai-explanation-product-spec.md`。
 
 ## 本机确定性测试
 

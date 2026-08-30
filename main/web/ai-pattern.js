@@ -24,16 +24,17 @@ export class PatternAckGate {
     return this.pending !== null;
   }
 
-  wait(timeoutMs = 3500) {
+  wait(timeoutMs = 3500, matcher = null) {
     if (this.pending) {
-      return Promise.reject(new AiPatternError('protocol_busy', '已有 Pattern 正在等待硬件确认。'));
+      return Promise.reject(new AiPatternError('protocol_busy', '已有 Pattern COMMIT 正在等待硬件确认。'));
     }
     return new Promise((resolve, reject) => {
       const transaction = {
-        resolve: () => {
+        matcher,
+        resolve: (message) => {
           clearTimeout(transaction.timeout);
           this.pending = null;
-          resolve();
+          resolve(message);
         },
         reject: (error) => {
           clearTimeout(transaction.timeout);
@@ -45,7 +46,7 @@ export class PatternAckGate {
       transaction.timeout = setTimeout(() => {
         if (this.pending === transaction) {
           transaction.reject(
-            new AiPatternError('protocol_timeout', '硬件未在规定时间内确认 PATTERN。'),
+            new AiPatternError('protocol_timeout', '硬件未在规定时间内确认 COMMIT。'),
           );
         }
       }, timeoutMs);
@@ -53,9 +54,10 @@ export class PatternAckGate {
     });
   }
 
-  acknowledge() {
+  acknowledge(message) {
     if (!this.pending) return false;
-    this.pending.resolve();
+    if (this.pending.matcher && !this.pending.matcher(message)) return false;
+    this.pending.resolve(message);
     return true;
   }
 

@@ -1,4 +1,5 @@
 #include "board_power.h"
+#include "capture_controller.h"
 #include "drum_pads.h"
 #include "esp_err.h"
 #include "esp_log.h"
@@ -28,6 +29,12 @@ void app_main(void)
         ESP_LOGE(TAG, "Metronome/I2S initialization failed: %s", esp_err_to_name(err));
         return;
     }
+    err = capture_controller_init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Capture controller initialization failed: %s",
+                 esp_err_to_name(err));
+        return;
+    }
     err = led_display_start();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "WS2812 initialization failed: %s", esp_err_to_name(err));
@@ -45,7 +52,9 @@ void app_main(void)
     }
 
     board_status_led_set(true);
-    ESP_LOGI(TAG, "Hardware metronome ready; press encoder to start/stop");
+    ESP_LOGI(TAG,
+             "Hardware drum machine ready; S8 records when web capture is ready, "
+             "encoder starts/stops playback");
 
     err = usb_serial_control_start();
     if (err != ESP_OK) {
