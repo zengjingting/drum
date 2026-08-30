@@ -3,30 +3,536 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0a0b0d">
-  <meta name="description" content="EasyInput 六音色硬件鼓机与 16 步音序器">
-  <title>EasyInput Drum Machine</title>
+  <meta name="theme-color" content="#080b0d">
+  <meta name="description" content="EasyInput 六音色 AI 硬件鼓机与 16 步音序器">
+  <title>EasyInput AI Drum Machine</title>
   <style>
-    :root{color-scheme:dark;--ink:#f4f2ea;--muted:#888b86;--line:#292c2d;--panel:#141617;--panel2:#101213;--accent:#ff7043;--cool:#71e0d4;--step:34px;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}*{box-sizing:border-box}body{margin:0;min-height:100dvh;color:var(--ink);background:radial-gradient(circle at 86% 0%,rgba(113,224,212,.08),transparent 28rem),radial-gradient(circle at 10% 100%,rgba(255,112,67,.09),transparent 30rem),#0a0b0d}button,textarea{font:inherit}main{width:min(1180px,calc(100% - 32px));margin:auto;padding:28px 0 56px}header{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:28px}.brand{display:flex;align-items:center;gap:14px}.brand-mark{width:40px;height:40px;display:grid;grid-template-columns:repeat(3,1fr);align-items:end;gap:3px;padding:8px;border:1px solid #343839;border-radius:12px;background:var(--panel)}.brand-mark i{display:block;border-radius:2px;background:var(--cool)}.brand-mark i:nth-child(1){height:45%}.brand-mark i:nth-child(2){height:100%;background:var(--accent)}.brand-mark i:nth-child(3){height:68%}.eyebrow{margin:0 0 3px;color:var(--cool);font:700 10px/1 ui-monospace,monospace;letter-spacing:.18em;text-transform:uppercase}h1{margin:0;font-size:clamp(18px,3vw,24px);line-height:1;letter-spacing:-.03em}.connection{display:flex;align-items:center;gap:8px;min-height:40px;padding:0 14px;border:1px solid #343839;border-radius:999px;color:var(--muted);background:var(--panel);cursor:pointer}.connection:hover{color:var(--ink);border-color:#555a5b}.connection:focus-visible,button:focus-visible,textarea:focus-visible{outline:2px solid var(--cool);outline-offset:3px}.dot{width:8px;height:8px;border-radius:50%;background:#5c6061}.connection.online .dot{background:var(--cool);box-shadow:0 0 0 4px rgba(113,224,212,.12)}.connection.error .dot{background:var(--accent)}.transport{display:grid;grid-template-columns:minmax(230px,.72fr) minmax(320px,1.28fr);gap:16px;margin-bottom:16px}.panel{border:1px solid var(--line);border-radius:20px;background:linear-gradient(145deg,rgba(22,24,25,.98),rgba(16,18,19,.96));box-shadow:0 18px 60px rgba(0,0,0,.18)}.tempo-panel{display:grid;grid-template-columns:1fr auto;align-items:center;padding:24px}.tempo-label{margin:0 0 6px;color:var(--muted);font-size:11px;letter-spacing:.12em}.tempo-readout{display:flex;align-items:baseline;gap:9px}#bpmValue{font-size:clamp(56px,8vw,88px);font-weight:760;line-height:.82;letter-spacing:-.08em;font-variant-numeric:tabular-nums}.unit{color:var(--muted);font:600 11px/1 ui-monospace,monospace;letter-spacing:.12em}.tempo-buttons{display:grid;gap:8px}.icon-button{width:42px;height:42px;border:1px solid #373b3c;border-radius:12px;color:var(--ink);background:var(--panel2);cursor:pointer}.icon-button:hover{border-color:#626767}.icon-button:disabled,.primary:disabled,.ai-action:disabled{cursor:not-allowed;opacity:.38}.play-panel{display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:center;padding:22px 24px}.primary{width:80px;height:80px;border:0;border-radius:50%;color:#101112;background:var(--ink);font-weight:800;cursor:pointer;box-shadow:0 10px 32px rgba(0,0,0,.24)}.primary.running{color:white;background:var(--accent)}.beat-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.beat{height:54px;display:grid;place-items:end start;padding:9px;border:1px solid #303435;border-radius:12px;color:#555a5b;background:var(--panel2);font:600 10px/1 ui-monospace,monospace;transition:70ms ease}.beat.active{color:var(--cool);border-color:rgba(113,224,212,.55);background:rgba(113,224,212,.09);transform:translateY(-3px)}.beat.accent{color:var(--accent);border-color:rgba(255,112,67,.6);background:rgba(255,112,67,.1)}.pads{padding:22px;margin-bottom:16px}.section-heading{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:16px}.section-heading h2{margin:0 0 4px;font-size:15px}.section-heading p{margin:0;color:var(--muted);font-size:11px}.pad-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}.pad-card{--pad:var(--cool);min-width:0;min-height:92px;position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;padding:13px;overflow:hidden;border:1px solid #303435;border-radius:14px;color:var(--ink);background:var(--panel2);text-align:left;cursor:pointer;transition:transform 80ms,border-color 80ms,background 80ms}.pad-card:after{content:"";position:absolute;right:-18px;bottom:-26px;width:74px;height:74px;border-radius:50%;background:var(--pad);opacity:.08}.pad-card:hover{border-color:var(--pad)}.pad-card.hit{transform:translateY(-5px) scale(1.015);border-color:var(--pad);background:color-mix(in srgb,var(--pad) 12%,var(--panel2))}.pad-card:disabled{cursor:not-allowed;opacity:.42}.pad-key{color:var(--pad);font:700 10px/1 ui-monospace,monospace;letter-spacing:.12em}.pad-name{position:relative;z-index:1;overflow:hidden;max-width:100%;font-size:13px;font-weight:700;white-space:nowrap;text-overflow:ellipsis}.ai-panel{padding:22px;margin-bottom:16px}.ai-compose{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:stretch}.ai-compose textarea{min-height:82px;resize:vertical;padding:13px 14px;border:1px solid #343839;border-radius:12px;color:var(--ink);background:#0e1011;line-height:1.5}.ai-action{min-width:118px;padding:0 18px;border:0;border-radius:12px;color:#101112;background:var(--cool);font-weight:800;cursor:pointer}.ai-action.secondary{min-height:40px;color:var(--ink);background:transparent;border:1px solid #414647}.ai-status{min-height:18px;margin:10px 0 0;color:var(--muted);font-size:11px}.ai-status.error{color:var(--accent)}.ai-status.success{color:var(--cool)}.ai-result{margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}.ai-result[hidden]{display:none}.ai-result-head{display:flex;align-items:start;justify-content:space-between;gap:18px;margin-bottom:12px}.ai-result-title{margin:0;font-size:16px}.ai-result-meta,.ai-note{margin:4px 0 0;color:var(--muted);font-size:11px}.ai-note{max-width:720px;line-height:1.55}.ai-preview-scroll{overflow-x:auto;padding:4px 0 10px}.ai-preview-grid{display:grid;grid-template-columns:120px repeat(16,22px);gap:5px;width:max-content;align-items:center}.ai-preview-step{width:22px;height:22px;border:1px solid #303435;border-radius:6px;background:#0e1011}.ai-preview-step.on{border-color:var(--pad);background:var(--pad);box-shadow:inset 0 0 0 3px rgba(0,0,0,.18)}.sequencer{padding:22px}.utility{display:flex;gap:8px}.text-button{min-height:34px;padding:0 12px;border:1px solid #343839;border-radius:9px;color:var(--muted);background:transparent;font-size:11px;cursor:pointer}.text-button:hover{color:var(--ink);border-color:#626767}.text-button:disabled,.step:disabled{cursor:not-allowed;opacity:.32}.sequence-scroll{overflow-x:auto;padding-bottom:8px;scrollbar-color:#414647 transparent}.sequence-grid{display:grid;grid-template-columns:120px repeat(16,var(--step));gap:7px;width:max-content;min-width:100%;align-items:center}.corner-label,.step-number{color:#616667;font:600 9px/1 ui-monospace,monospace;text-align:center}.corner-label{text-align:left}.step-number.bar{color:#a7aaa5}.track-label{display:flex;align-items:center;gap:9px;min-width:0;font-size:11px;font-weight:650}.track-dot{flex:0 0 auto;width:7px;height:7px;border-radius:50%;background:var(--pad);box-shadow:0 0 12px color-mix(in srgb,var(--pad) 55%,transparent)}.step{width:var(--step);height:var(--step);padding:0;border:1px solid #303435;border-radius:9px;color:transparent;background:#0e1011;cursor:pointer;transition:transform 60ms,border-color 60ms,background 60ms}.step:hover{transform:scale(1.08);border-color:var(--pad)}.step:disabled:hover{transform:none;border-color:#303435}.step.on{border-color:var(--pad);background:var(--pad);box-shadow:inset 0 0 0 4px rgba(0,0,0,.16),0 0 14px color-mix(in srgb,var(--pad) 25%,transparent)}.step.playhead{outline:2px solid var(--ink);outline-offset:2px}.sequence-footer{display:flex;justify-content:space-between;gap:20px;margin-top:14px;color:var(--muted);font-size:10px}.sequence-footer strong{color:var(--ink);font-weight:650}.sequence-status.error{color:var(--accent)}@media(max-width:780px){.transport{grid-template-columns:1fr}.pad-grid{grid-template-columns:repeat(3,1fr)}.ai-compose{grid-template-columns:1fr}.ai-action{min-height:46px}}@media(max-width:520px){main{width:calc(100% - 20px);padding-top:18px}header{align-items:flex-start}.connection{padding:0 11px}.connection span:last-child{max-width:92px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.tempo-panel,.play-panel,.pads,.ai-panel,.sequencer{padding:17px}.pad-grid{grid-template-columns:repeat(2,1fr)}.section-heading{align-items:flex-start}.sequence-grid{grid-template-columns:96px repeat(16,var(--step))}.sequence-footer{flex-direction:column;gap:5px}.ai-result-head{flex-direction:column}}@media(prefers-reduced-motion:reduce){.beat,.pad-card,.step{transition:none}}
+    :root {
+      color-scheme: dark;
+      --ink: #f4f2ea;
+      --muted: #7d8989;
+      --line: #263033;
+      --line-strong: #38474a;
+      --surface: rgba(16, 20, 22, .94);
+      --surface-2: #0d1113;
+      --surface-3: #151b1d;
+      --accent: #ff7043;
+      --accent-soft: rgba(255, 112, 67, .13);
+      --cool: #71e0d4;
+      --cool-soft: rgba(113, 224, 212, .10);
+      --danger: #ff6b62;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(113, 224, 212, .025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(113, 224, 212, .025) 1px, transparent 1px),
+        radial-gradient(circle at 15% 0%, rgba(255, 112, 67, .10), transparent 30rem),
+        radial-gradient(circle at 100% 65%, rgba(113, 224, 212, .08), transparent 34rem),
+        #080b0d;
+      background-size: 32px 32px, 32px 32px, auto, auto, auto;
+      overflow: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      background: repeating-linear-gradient(0deg, transparent 0 3px, rgba(255,255,255,.012) 4px);
+    }
+
+    button, textarea, input { font: inherit; }
+    button { -webkit-tap-highlight-color: transparent; }
+    button:focus-visible, textarea:focus-visible, input:focus-visible {
+      outline: 2px solid var(--cool);
+      outline-offset: 3px;
+    }
+
+    main {
+      width: min(1480px, calc(100% - 48px));
+      height: 100dvh;
+      margin: auto;
+      padding: 18px 0;
+      display: grid;
+      grid-template-rows: 64px minmax(0, 1fr);
+      gap: 14px;
+    }
+
+    .topbar {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(190px, auto) minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 22px;
+      padding: 9px 11px 9px 14px;
+      border: 1px solid var(--line-strong);
+      border-top-color: rgba(255, 112, 67, .72);
+      border-radius: 10px;
+      background: linear-gradient(100deg, rgba(25, 28, 30, .98), rgba(12, 16, 18, .96));
+      box-shadow: 0 12px 34px rgba(0,0,0,.30), inset 0 1px rgba(255,255,255,.035);
+    }
+
+    .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      flex: 0 0 auto;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      align-items: end;
+      gap: 3px;
+      padding: 7px;
+      border: 1px solid var(--line-strong);
+      border-radius: 7px;
+      background: #0b0f11;
+      box-shadow: 0 0 20px rgba(113, 224, 212, .07);
+    }
+    .brand-mark i { display: block; border-radius: 1px; background: var(--cool); }
+    .brand-mark i:nth-child(1) { height: 45%; }
+    .brand-mark i:nth-child(2) { height: 100%; background: var(--accent); }
+    .brand-mark i:nth-child(3) { height: 68%; }
+    .eyebrow {
+      margin: 0 0 4px;
+      color: var(--cool);
+      font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 0; font-size: 17px; line-height: 1; letter-spacing: -.025em; white-space: nowrap; }
+
+    .transport {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+    }
+    .tempo-panel { display: flex; align-items: center; gap: 9px; }
+    .tempo-label { margin: 0; color: var(--muted); font: 700 8px/1 ui-monospace, monospace; letter-spacing: .14em; }
+    .tempo-readout { display: flex; align-items: baseline; gap: 6px; }
+    #bpmValue { font-size: 31px; font-weight: 760; line-height: .8; letter-spacing: -.06em; font-variant-numeric: tabular-nums; }
+    .unit { color: var(--muted); font: 700 9px/1 ui-monospace, monospace; letter-spacing: .10em; }
+    .tempo-buttons { display: grid; grid-template-columns: repeat(2, 26px); gap: 4px; }
+    .icon-button {
+      width: 26px;
+      height: 26px;
+      padding: 0;
+      border: 1px solid var(--line-strong);
+      border-radius: 5px;
+      color: var(--ink);
+      background: var(--surface-2);
+      cursor: pointer;
+    }
+    .icon-button:hover { color: var(--cool); border-color: var(--cool); }
+
+    .transport-divider { width: 1px; height: 30px; background: var(--line); }
+    .play-panel { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .primary {
+      min-width: 64px;
+      height: 38px;
+      padding: 0 15px;
+      border: 1px solid rgba(255, 112, 67, .72);
+      border-radius: 6px;
+      color: #fff;
+      background: linear-gradient(135deg, #ff7043, #db4f31);
+      box-shadow: 0 0 20px rgba(255, 112, 67, .16);
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .primary.running { color: #07100f; border-color: var(--cool); background: var(--cool); box-shadow: 0 0 24px rgba(113,224,212,.24); }
+    .beat-strip { width: min(260px, 20vw); display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+    .beat {
+      height: 29px;
+      position: relative;
+      display: grid;
+      place-items: center;
+      border: 1px solid #263033;
+      border-radius: 4px;
+      color: #566163;
+      background: #0b0f11;
+      font: 700 9px/1 ui-monospace, monospace;
+      transition: 70ms ease;
+    }
+    .beat::before { content: ""; position: absolute; top: 0; left: 20%; right: 20%; height: 1px; background: currentColor; opacity: .45; }
+    .beat.active { color: var(--cool); border-color: rgba(113, 224, 212, .58); background: var(--cool-soft); box-shadow: 0 0 13px rgba(113,224,212,.12); }
+    .beat.accent { color: var(--accent); border-color: rgba(255, 112, 67, .65); background: var(--accent-soft); }
+
+    .connection {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 38px;
+      padding: 0 13px;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      color: #a3aaaa;
+      background: #0b0f11;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .connection:hover { color: var(--ink); border-color: #59676a; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #5c6061; }
+    .connection.online .dot { background: var(--cool); box-shadow: 0 0 0 4px rgba(113,224,212,.10), 0 0 12px var(--cool); }
+    .connection.error .dot { background: var(--danger); box-shadow: 0 0 10px rgba(255,107,98,.4); }
+
+    .workspace {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(320px, 360px);
+      gap: 14px;
+    }
+
+    .instrument-panel, .assistant-panel {
+      min-width: 0;
+      min-height: 0;
+      position: relative;
+      border: 1px solid var(--line-strong);
+      border-radius: 10px;
+      background: var(--surface);
+      box-shadow: 0 20px 60px rgba(0,0,0,.24), inset 0 1px rgba(255,255,255,.025);
+      overflow: hidden;
+    }
+    .instrument-panel::before, .assistant-panel::before {
+      content: "";
+      position: absolute;
+      z-index: 2;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      pointer-events: none;
+      background: linear-gradient(90deg, var(--accent), rgba(255,112,67,.1) 45%, transparent);
+    }
+    .assistant-panel::before { background: linear-gradient(90deg, var(--cool), rgba(113,224,212,.1) 55%, transparent); }
+
+    .instrument-panel {
+      display: grid;
+      grid-template-rows: auto minmax(250px, 1fr) auto auto;
+      padding: 17px 18px 14px;
+    }
+    .section-heading {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 13px;
+    }
+    .section-heading h2 { margin: 0 0 4px; font-size: 14px; letter-spacing: -.01em; }
+    .section-heading p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.35; }
+    .module-code { color: var(--accent); font: 700 9px/1 ui-monospace, monospace; letter-spacing: .15em; }
+    .assistant-panel .module-code { color: var(--cool); }
+
+    .utility { display: flex; align-items: center; gap: 7px; }
+    .text-button {
+      min-height: 30px;
+      padding: 0 11px;
+      border: 1px solid var(--line-strong);
+      border-radius: 5px;
+      color: var(--muted);
+      background: transparent;
+      font-size: 10px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .text-button:hover { color: var(--accent); border-color: var(--accent); }
+
+    .sequence-scroll {
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      overflow: auto;
+      scrollbar-color: #3c484a transparent;
+    }
+    .sequence-grid {
+      width: 100%;
+      min-width: 690px;
+      display: grid;
+      grid-template-columns: 116px repeat(16, minmax(24px, 1fr));
+      gap: 5px;
+      align-items: center;
+    }
+    .corner-label, .step-number { color: #526064; font: 700 8px/1 ui-monospace, monospace; text-align: center; }
+    .corner-label { color: #7e8b8e; text-align: left; letter-spacing: .12em; }
+    .step-number.bar { color: var(--ink); }
+    .track-label {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #bdc4c3;
+      font-size: 10px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .track-dot { width: 6px; height: 22px; flex: 0 0 auto; border-radius: 2px; background: var(--pad); box-shadow: 0 0 12px color-mix(in srgb,var(--pad) 42%,transparent); }
+    .step {
+      width: 100%;
+      aspect-ratio: 1.18;
+      min-height: 27px;
+      padding: 0;
+      border: 1px solid #273033;
+      border-radius: 4px;
+      color: transparent;
+      background: linear-gradient(145deg, #121719, #0a0e10);
+      box-shadow: inset 0 1px rgba(255,255,255,.025);
+      cursor: pointer;
+      transition: transform 60ms, border-color 60ms, background 60ms, box-shadow 60ms;
+    }
+    .step[data-step="4"], .step[data-step="8"], .step[data-step="12"] { border-left-color: #536164; }
+    .step:hover { transform: translateY(-2px); border-color: var(--pad); }
+    .step.on {
+      border-color: color-mix(in srgb, var(--pad) 84%, white);
+      background: linear-gradient(145deg, color-mix(in srgb,var(--pad) 90%,white), var(--pad));
+      box-shadow: inset 0 0 0 2px rgba(0,0,0,.13), 0 0 13px color-mix(in srgb,var(--pad) 28%,transparent);
+    }
+    .step.playhead { outline: 2px solid var(--ink); outline-offset: 2px; transform: translateY(-1px); }
+
+    .pads {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+    }
+    .pads-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+    .pads-head h2 { margin: 0; color: #aeb6b5; font-size: 10px; letter-spacing: .10em; text-transform: uppercase; }
+    .pads-head p { margin: 0; color: #5f6b6d; font-size: 9px; }
+    .pad-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 7px; }
+    .pad-card {
+      --pad: var(--cool);
+      min-width: 0;
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 8px 9px;
+      overflow: hidden;
+      border: 1px solid #2c3739;
+      border-radius: 5px;
+      color: var(--ink);
+      background: #0b1012;
+      text-align: left;
+      cursor: pointer;
+      transition: transform 80ms, border-color 80ms, background 80ms;
+    }
+    .pad-card:hover { border-color: var(--pad); }
+    .pad-card.hit { transform: translateY(-3px); border-color: var(--pad); background: color-mix(in srgb,var(--pad) 13%,#0b1012); box-shadow: 0 0 18px color-mix(in srgb,var(--pad) 14%,transparent); }
+    .pad-key { flex: 0 0 auto; padding: 4px 5px; border: 1px solid color-mix(in srgb,var(--pad) 60%,#263033); border-radius: 3px; color: var(--pad); font: 800 8px/1 ui-monospace, monospace; }
+    .pad-name { min-width: 0; overflow: hidden; font-size: 10px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+
+    .sequence-footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      margin-top: 10px;
+      color: var(--muted);
+      font: 600 9px/1.2 ui-monospace, monospace;
+    }
+    .sequence-footer strong { color: var(--ink); font-weight: 700; }
+    .sequence-status.error { color: var(--danger); }
+
+    .assistant-panel { display: flex; flex-direction: column; overflow-y: auto; scrollbar-color: #3c484a transparent; }
+    .assistant-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 15px 16px 12px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(90deg, rgba(113,224,212,.045), transparent);
+    }
+    .assistant-title { display: flex; align-items: center; gap: 9px; }
+    .assistant-orb { width: 9px; height: 9px; border: 1px solid var(--cool); border-radius: 50%; box-shadow: 0 0 12px var(--cool), inset 0 0 5px var(--cool); }
+    .assistant-title h2 { margin: 0; font-size: 12px; letter-spacing: .08em; }
+    .assistant-state { color: var(--muted); font: 700 8px/1 ui-monospace, monospace; letter-spacing: .12em; }
+    .assistant-section { padding: 15px 16px; }
+    .assistant-section + .assistant-section { border-top: 1px solid var(--line); }
+    .assistant-section .section-heading { align-items: flex-start; margin-bottom: 10px; }
+    .ai-panel, .recording-panel { margin: 0; }
+
+    .ai-compose { display: grid; gap: 8px; }
+    .ai-compose textarea {
+      width: 100%;
+      min-height: 88px;
+      max-height: 160px;
+      resize: vertical;
+      padding: 11px 12px;
+      border: 1px solid #334043;
+      border-radius: 6px;
+      color: var(--ink);
+      background: #090d0f;
+      font-size: 11px;
+      line-height: 1.55;
+    }
+    .ai-compose textarea::placeholder { color: #596466; }
+    .ai-action {
+      min-height: 36px;
+      padding: 0 12px;
+      border: 1px solid var(--cool);
+      border-radius: 5px;
+      color: #07100f;
+      background: linear-gradient(135deg, #79e6da, #52bfb5);
+      box-shadow: 0 0 18px rgba(113,224,212,.10);
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .ai-action:hover { filter: brightness(1.07); }
+    .ai-action.secondary { color: #c5cecd; background: transparent; border-color: #3a484a; box-shadow: none; }
+    .ai-action.secondary:hover { color: var(--cool); border-color: var(--cool); }
+    .icon-button:disabled, .primary:disabled, .ai-action:disabled, .text-button:disabled, .step:disabled, .pad-card:disabled { cursor: not-allowed; opacity: .36; }
+    .step:disabled:hover { transform: none; border-color: #273033; }
+
+    .ai-status { min-height: 15px; margin: 8px 0 0; color: var(--muted); font-size: 9px; line-height: 1.45; }
+    .ai-status.error { color: var(--danger); }
+    .ai-status.success { color: var(--cool); }
+    .ai-result { margin-top: 11px; padding: 10px 0 0 11px; border-top: 1px solid var(--line); border-left: 2px solid var(--cool); }
+    .ai-result-head { display: grid; gap: 9px; }
+    .ai-result-title { margin: 0; font-size: 12px; }
+    .ai-result-meta, .ai-note { margin: 4px 0 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+    .ai-result .ai-action { justify-self: start; min-width: 74px; }
+
+    .record-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+    .pattern-name {
+      grid-column: 1 / -1;
+      min-height: 36px;
+      padding: 0 11px;
+      border: 1px solid #334043;
+      border-radius: 5px;
+      color: var(--ink);
+      background: #090d0f;
+      font-size: 11px;
+    }
+    .record-button { grid-column: 1 / -1; }
+    .record-button.recording { color: white; border-color: var(--accent); background: linear-gradient(135deg, #ff7043, #d94e31); box-shadow: 0 0 20px rgba(255,112,67,.18); }
+    .record-status-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+    .record-status-row .ai-status:last-child { text-align: right; }
+
+    .explanation-result { margin-top: 10px; padding: 11px; border: 1px solid #2f3b3d; border-radius: 6px; background: #0a0e10; }
+    .style-chips { display: flex; gap: 5px; flex-wrap: wrap; margin: 8px 0; }
+    .style-chip { padding: 4px 6px; border: 1px solid #3a4c4e; border-radius: 3px; color: var(--cool); font-size: 8px; }
+    .evidence-list { margin: 9px 0; padding-left: 17px; color: #bcc5c4; font-size: 9px; line-height: 1.55; }
+    .explanation-stale { margin: 8px 0 0; color: var(--accent); font-size: 9px; }
+
+    @media (max-width: 1080px) {
+      body { overflow: auto; }
+      main { width: min(920px, calc(100% - 28px)); height: auto; min-height: 100dvh; grid-template-rows: auto auto; }
+      .topbar { grid-template-columns: 1fr auto; }
+      .transport { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; padding-top: 8px; border-top: 1px solid var(--line); }
+      .workspace { grid-template-columns: 1fr; }
+      .instrument-panel { min-height: 610px; }
+      .assistant-panel { overflow: visible; }
+      .assistant-section { padding: 16px; }
+    }
+
+    @media (max-width: 680px) {
+      main { width: calc(100% - 18px); padding: 9px 0 28px; gap: 9px; }
+      .topbar { gap: 10px; padding: 10px; }
+      .connection { padding: 0 10px; }
+      .connection span:last-child { max-width: 82px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .transport { flex-wrap: wrap; gap: 9px; }
+      .transport-divider { display: none; }
+      .beat-strip { width: 100%; order: 3; }
+      .workspace { gap: 9px; }
+      .instrument-panel { min-height: 590px; padding: 14px 10px 12px; }
+      .section-heading { align-items: flex-start; }
+      .sequence-grid { min-width: 650px; }
+      .pad-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .pads-head { align-items: flex-start; flex-direction: column; gap: 4px; }
+      .sequence-footer { flex-direction: column; gap: 5px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .beat, .pad-card, .step { transition: none; }
+    }
   </style>
 </head>
 <body>
   <main>
-    <header><div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><div><p class="eyebrow">EasyInput · 96 PPQN</p><h1>Drum Machine</h1></div></div><button class="connection" id="connectDevice" type="button" aria-live="polite"><span class="dot" aria-hidden="true"></span><span id="connectionText">连接设备</span></button></header>
-    <section class="transport" aria-label="速度与播放控制">
-      <div class="panel tempo-panel"><div><p class="tempo-label">TEMPO</p><div class="tempo-readout"><span id="bpmValue">120</span><span class="unit">BPM</span></div></div><div class="tempo-buttons"><button class="icon-button" id="faster" type="button" aria-label="速度加一" disabled>＋</button><button class="icon-button" id="slower" type="button" aria-label="速度减一" disabled>−</button></div></div>
-      <div class="panel play-panel"><button class="primary" id="toggle" type="button" disabled>开始</button><div class="beat-strip" aria-label="四拍显示"><div class="beat"><span>01</span></div><div class="beat"><span>02</span></div><div class="beat"><span>03</span></div><div class="beat"><span>04</span></div></div></div>
-    </section>
-    <section class="panel pads" aria-labelledby="padsTitle"><div class="section-heading"><div><h2 id="padsTitle">实体按钮映射</h2><p>S3 暂停使用 · Closed Hi-Hat 已迁移至 S7</p></div></div><div class="pad-grid" id="padGrid"></div></section>
-    <section class="panel ai-panel" aria-labelledby="aiTitle">
-      <div class="section-heading"><div><h2 id="aiTitle">AI 编写鼓点</h2><p>DeepSeek V4 Flash · 先生成候选，点击“应用”后填入下方音序器</p></div></div>
-      <div class="ai-compose"><textarea id="aiPrompt" maxlength="500" placeholder="例如：给我一个 92 BPM、松弛一点的 Boom Bap，底鼓不要太密，第二和第四拍有军鼓。"></textarea><button class="ai-action" id="generatePattern" type="button">生成鼓点</button></div>
-      <p class="ai-status" id="aiStatus" aria-live="polite">输入描述后生成，网页会再次校验六轨 16 步结构。</p>
-      <div class="ai-result" id="aiResult" hidden>
-        <div class="ai-result-head"><div><h3 class="ai-result-title" id="aiPatternTitle"></h3><p class="ai-result-meta" id="aiPatternMeta"></p><p class="ai-note" id="aiPatternNote"></p></div><button class="ai-action secondary" id="applyAiPattern" type="button" disabled>应用</button></div>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <div><p class="eyebrow">EasyInput · 96 PPQN</p><h1>AI Drum Machine</h1></div>
       </div>
-    </section>
-    <section class="panel sequencer" aria-labelledby="sequenceTitle"><div class="section-heading"><div><h2 id="sequenceTitle">16 步音序器</h2><p id="sequenceSource">每格为 1/16 音符 · 四步一拍 · 自动跟随当前 BPM</p></div><div class="utility"><button class="text-button" id="clearPattern" type="button">清空</button></div></div><div class="sequence-scroll"><div class="sequence-grid" id="sequenceGrid"></div></div><div class="sequence-footer"><span class="sequence-status" id="patternStatus" aria-live="polite">连接设备后同步</span><span id="barDuration"><strong>2.00 秒</strong> / 小节</span></div></section>
+
+      <div class="transport" aria-label="速度与播放控制">
+        <div class="tempo-panel">
+          <div><p class="tempo-label">TEMPO</p><div class="tempo-readout"><span id="bpmValue">120</span><span class="unit">BPM</span></div></div>
+          <div class="tempo-buttons"><button class="icon-button" id="slower" type="button" aria-label="速度减一" disabled>−</button><button class="icon-button" id="faster" type="button" aria-label="速度加一" disabled>＋</button></div>
+        </div>
+        <span class="transport-divider" aria-hidden="true"></span>
+        <div class="play-panel">
+          <button class="primary" id="toggle" type="button" disabled>开始</button>
+          <div class="beat-strip" aria-label="四拍显示"><div class="beat"><span>01</span></div><div class="beat"><span>02</span></div><div class="beat"><span>03</span></div><div class="beat"><span>04</span></div></div>
+        </div>
+      </div>
+
+      <button class="connection" id="connectDevice" type="button" aria-live="polite"><span class="dot" aria-hidden="true"></span><span id="connectionText">连接设备</span></button>
+    </header>
+
+    <div class="workspace">
+      <section class="instrument-panel" aria-labelledby="sequenceTitle">
+        <div class="section-heading">
+          <div><span class="module-code">01 / PATTERN</span><h2 id="sequenceTitle">16 步音序器</h2><p id="sequenceSource">每格为 1/16 音符 · 四步一拍 · 自动跟随当前 BPM</p></div>
+          <div class="utility"><button class="text-button" id="clearPattern" type="button">清空 Pattern</button></div>
+        </div>
+
+        <div class="sequence-scroll"><div class="sequence-grid" id="sequenceGrid"></div></div>
+
+        <section class="pads" aria-labelledby="padsTitle">
+          <div class="pads-head"><h2 id="padsTitle">Hardware Pad Monitor</h2><p>S3 暂停使用 · Closed Hi-Hat 已迁移至 S7</p></div>
+          <div class="pad-grid" id="padGrid"></div>
+        </section>
+
+        <div class="sequence-footer"><span class="sequence-status" id="patternStatus" aria-live="polite">连接设备后同步</span><span id="barDuration"><strong>2.00 秒</strong> / 小节</span></div>
+      </section>
+
+      <aside class="assistant-panel" aria-label="AI 创作、录制与解释">
+        <div class="assistant-head">
+          <div class="assistant-title"><span class="assistant-orb" aria-hidden="true"></span><h2>AI COPILOT</h2></div>
+          <span class="assistant-state">DEEPSEEK V4 · READY</span>
+        </div>
+
+        <section class="assistant-section ai-panel" aria-labelledby="aiTitle">
+          <div class="section-heading"><div><span class="module-code">02 / GENERATE</span><h2 id="aiTitle">用一句话编写鼓点</h2><p>生成候选后，点击“应用”写入左侧主音序器</p></div></div>
+          <div class="ai-compose"><textarea id="aiPrompt" maxlength="500" placeholder="例如：给我一个 92 BPM、松弛一点的 Boom Bap，底鼓不要太密，第二和第四拍有军鼓。"></textarea><button class="ai-action" id="generatePattern" type="button">生成鼓点</button></div>
+          <p class="ai-status" id="aiStatus" aria-live="polite">输入描述后生成，系统会校验六轨 16 步结构。</p>
+          <div class="ai-result" id="aiResult" hidden>
+            <div class="ai-result-head"><div><h3 class="ai-result-title" id="aiPatternTitle"></h3><p class="ai-result-meta" id="aiPatternMeta"></p><p class="ai-note" id="aiPatternNote"></p></div><button class="ai-action secondary" id="applyAiPattern" type="button" disabled>应用</button></div>
+          </div>
+        </section>
+
+        <section class="assistant-section recording-panel" aria-labelledby="recordingTitle">
+          <div class="section-heading"><div><span class="module-code">03 / CAPTURE</span><h2 id="recordingTitle">录制实体演奏</h2><p>停止后近似量化到左侧音序器，再由 AI 解释</p></div></div>
+          <div class="record-actions">
+            <input class="pattern-name" id="patternName" maxlength="80" value="我的鼓点" aria-label="Pattern 名称">
+            <button class="ai-action record-button" id="recordPattern" type="button" disabled>开始录制</button>
+            <button class="ai-action secondary" id="savePattern" type="button" disabled>保存</button>
+            <button class="ai-action secondary" id="explainPattern" type="button" disabled>AI 解释</button>
+          </div>
+          <div class="record-status-row"><p class="ai-status" id="recordStatus" aria-live="polite">连接支持录制的固件后开始。</p><p class="ai-status" id="saveStatus" aria-live="polite">尚未保存</p></div>
+          <div class="explanation-result" id="explanationResult" hidden>
+            <h3 class="ai-result-title" id="explanationSummary"></h3>
+            <div class="style-chips" id="explanationStyles"></div>
+            <ol class="evidence-list" id="explanationEvidence"></ol>
+            <p class="ai-note" id="explanationSuggestion"></p>
+            <p class="ai-note" id="explanationLimitations"></p>
+            <p class="explanation-stale" id="explanationStale" hidden>当前 Pattern 已修改，这份解释对应修改前版本。</p>
+          </div>
+        </section>
+      </aside>
+    </div>
   </main>
   <script type="module" src="./app.js"></script>
 </body>

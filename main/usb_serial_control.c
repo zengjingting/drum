@@ -18,10 +18,14 @@
 #define USB_TX_BUFFER_SIZE 1024
 #define COMMAND_BUFFER_SIZE 96
 #define STATE_JSON_BUFFER_SIZE 512
+#define PAD_EVENT_QUEUE_LENGTH 64
 #define PROTOCOL_VERSION 2
 
 static const char *TAG = "usb_control";
 static QueueHandle_t s_state_queue;
+static QueueHandle_t s_pad_event_queue;
+static bool s_recording_stream;
+static uint64_t s_recording_start_frame;
 
 static void write_all(const char *text)
 {
@@ -50,7 +54,7 @@ static void send_state(metronome_state_t state)
     int length = snprintf(response, sizeof(response),
                           "{\"type\":\"state\",\"bpm\":%u,\"running\":%s,"
                           "\"protocolVersion\":%u,"
-                          "\"capabilities\":[\"pattern\",\"trigger\",\"sequencer\"],"
+                          "\"capabilities\":[\"pattern\",\"trigger\",\"sequencer\",\"padEvents\"],"
                           "\"accent\":%s,\"beat\":%" PRIu64 ","
                           "\"ppqnTick\":%" PRIu64 ",\"uiPosition\":%u,"
                           "\"ledPosition\":%u,\"sequenceStep\":%u,"
@@ -74,6 +78,46 @@ static void send_state(metronome_state_t state)
         return;
     }
     write_all(response);
+}
+
+static void send_pad_event(metronome_pad_event_t event)
+{
+    char response[160];
+    int length = snprintf(response, sizeof(response),
+                          "{\"type\":\"pad\",\"event\":%" PRIu32 ","
+                          "\"track\":%u,\"frame\":%" PRIu64 ","
+                          "\"source\":\"hardware\"}\n",
+                          event.event, event.track, event.frame);
+    if (length > 0 && (size_t)length < sizeof(response)) {
+        write_all(response);
+    }
+}
+
+static void send_record_boundary(const char *phase,
+                                 metronome_capture_marker_t marker)
+{
+    char response[192];
+    int length = snprintf(response, sizeof(response),
+                          "{\"type\":\"record\",\"phase\":\"%s\","
+                          "\"frame\":%" PRIu64 ",\"lastEvent\":%" PRIu32 ","
+                          "\"dropped\":%" PRIu32 "}\n",
+                          phase, marker.frame, marker.last_pad_event,
+                          marker.dropped_pad_events);
+    if (length > 0 && (size_t)length < sizeof(response)) {
+        write_all(response);
+    }
+}
+
+static void drain_pad_events(uint64_t end_frame)
+{
+    metronome_pad_event_t event;
+    while (xQueueReceive(s_pad_event_queue, &event, 0) == pdTRUE) {
+        if (s_recording_stream &&
+            event.frame >= s_recording_start_frame &&
+            event.frame <= end_frame) {
+            send_pad_event(event);
+        }
+    }
 }
 
 static void send_ack(const char *command)
@@ -107,6 +151,40 @@ static void handle_command(char *command)
 
     if (strcmp(command, "TOGGLE") == 0) {
         metronome_app_toggle();
+        return;
+    }
+
+    if (strcmp(command, "RECORD START") == 0) {
+        if (s_recording_stream) {
+            send_error("Recording is already active");
+            return;
+        }
+        xQueueReset(s_pad_event_queue);
+        metronome_capture_marker_t marker;
+        if (!metronome_app_capture_marker(&marker)) {
+            send_error("Recording start could not be queued");
+            return;
+        }
+        s_recording_start_frame = marker.frame;
+        s_recording_stream = true;
+        send_record_boundary("started", marker);
+        return;
+    }
+
+    if (strcmp(command, "RECORD STOP") == 0) {
+        if (!s_recording_stream) {
+            send_error("Recording is not active");
+            return;
+        }
+        metronome_capture_marker_t marker;
+        if (!metronome_app_capture_marker(&marker)) {
+            send_error("Recording stop could not be queued");
+            return;
+        }
+        drain_pad_events(marker.frame);
+        s_recording_stream = false;
+        xQueueReset(s_pad_event_queue);
+        send_record_boundary("stopped", marker);
         return;
     }
 
@@ -206,6 +284,11 @@ static void usb_control_task(void *arg)
         while (xQueueReceive(s_state_queue, &state, 0) == pdTRUE) {
             send_state(state);
         }
+        if (s_recording_stream) {
+            drain_pad_events(UINT64_MAX);
+        } else {
+            xQueueReset(s_pad_event_queue);
+        }
     }
 }
 
@@ -221,11 +304,17 @@ esp_err_t usb_serial_control_start(void)
     }
 
     s_state_queue = xQueueCreate(1, sizeof(metronome_state_t));
-    if (s_state_queue == NULL) {
+    s_pad_event_queue = xQueueCreate(PAD_EVENT_QUEUE_LENGTH,
+                                     sizeof(metronome_pad_event_t));
+    if (s_state_queue == NULL || s_pad_event_queue == NULL) {
         return ESP_ERR_NO_MEM;
     }
 
     err = metronome_app_subscribe(s_state_queue);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = metronome_app_subscribe_pad_events(s_pad_event_queue);
     if (err != ESP_OK) {
         return err;
     }
@@ -235,7 +324,8 @@ esp_err_t usb_serial_control_start(void)
     }
 
     ESP_LOGI(TAG,
-             "USB protocol v%d ready: STATE, TOGGLE, BPM, PATTERN, MASK, TRIGGER",
+             "USB protocol v%d ready: STATE, TOGGLE, BPM, PATTERN, MASK, "
+             "TRIGGER, RECORD",
              PROTOCOL_VERSION);
     return ESP_OK;
 }

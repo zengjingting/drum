@@ -1,5 +1,6 @@
 #include "metronome_app.h"
 
+#include <inttypes.h>
 #include <math.h>
 #include <string.h>
 
@@ -14,6 +15,7 @@
 
 #define AUDIO_FRAMES_PER_BLOCK 64
 #define MAX_SUBSCRIBERS 4
+#define MAX_PAD_EVENT_SUBSCRIBERS 2
 #define COMMAND_QUEUE_LENGTH 64
 #define SEQUENCE_STEP_COUNT 16
 #define SEQUENCE_TICKS_PER_STEP (METRONOME_PPQN / 4)
@@ -29,6 +31,7 @@ typedef enum {
     COMMAND_SET_RUNNING,
     COMMAND_TOGGLE,
     COMMAND_TRIGGER_DRUM,
+    COMMAND_CAPTURE_MARKER,
     COMMAND_SET_PATTERN_MASK,
     COMMAND_SET_PATTERN,
 } command_type_t;
@@ -38,6 +41,8 @@ typedef struct {
     int value;
     uint16_t pattern[METRONOME_DRUM_TRACK_COUNT];
     TaskHandle_t completion_task;
+    bool hardware_source;
+    metronome_capture_marker_t *marker_out;
 } metronome_command_t;
 
 typedef struct {
@@ -53,6 +58,8 @@ static QueueHandle_t s_command_queue;
 static SemaphoreHandle_t s_state_mutex;
 static QueueHandle_t s_subscribers[MAX_SUBSCRIBERS];
 static size_t s_subscriber_count;
+static QueueHandle_t s_pad_event_subscribers[MAX_PAD_EVENT_SUBSCRIBERS];
+static size_t s_pad_event_subscriber_count;
 static metronome_state_t s_state = {
     .bpm = METRONOME_DEFAULT_BPM,
     .running = false,
@@ -63,6 +70,8 @@ static drum_mixer_t s_drum_mixer;
 static uint16_t s_pattern[DRUM_SAMPLE_COUNT];
 static uint32_t s_pad_event;
 static uint8_t s_last_pad;
+static uint32_t s_hardware_pad_event;
+static uint32_t s_dropped_pad_events;
 
 static int clamp_bpm(int bpm)
 {
@@ -112,6 +121,31 @@ static void publish_state(metronome_state_t state)
     }
 }
 
+static void publish_pad_event(metronome_pad_event_t event)
+{
+    QueueHandle_t subscribers[MAX_PAD_EVENT_SUBSCRIBERS];
+    size_t count = 0;
+
+    if (xSemaphoreTake(s_state_mutex, portMAX_DELAY) == pdTRUE) {
+        count = s_pad_event_subscriber_count;
+        memcpy(subscribers, s_pad_event_subscribers,
+               count * sizeof(subscribers[0]));
+        xSemaphoreGive(s_state_mutex);
+    }
+
+    bool delivered = true;
+    for (size_t i = 0; i < count; ++i) {
+        if (xQueueSend(subscribers[i], &event, 0) != pdTRUE) {
+            delivered = false;
+        }
+    }
+    if (!delivered) {
+        s_dropped_pad_events++;
+        ESP_LOGW(TAG, "Pad event subscriber queue full; event %" PRIu32 " dropped",
+                 event.event);
+    }
+}
+
 static void start_click(click_voice_t *voice, bool accent)
 {
     const float frequency_hz = accent ? 1760.0f : 1120.0f;
@@ -144,7 +178,8 @@ static int16_t render_click_sample(click_voice_t *voice)
 
 static bool apply_command(metronome_core_t *core,
                           click_voice_t *voice,
-                          const metronome_command_t *command)
+                          const metronome_command_t *command,
+                          uint64_t audio_frame)
 {
     if (command->type == COMMAND_TRIGGER_DRUM) {
         const drum_sample_t *sample = drum_samples_get((size_t)command->value);
@@ -154,7 +189,26 @@ static bool apply_command(metronome_core_t *core,
         }
         s_last_pad = (uint8_t)command->value;
         s_pad_event++;
+        if (command->hardware_source) {
+            const metronome_pad_event_t event = {
+                .event = ++s_hardware_pad_event,
+                .track = (uint8_t)command->value,
+                .frame = audio_frame,
+            };
+            publish_pad_event(event);
+        }
         return true;
+    }
+
+    if (command->type == COMMAND_CAPTURE_MARKER) {
+        if (command->marker_out != NULL) {
+            *command->marker_out = (metronome_capture_marker_t) {
+                .frame = audio_frame,
+                .last_pad_event = s_hardware_pad_event,
+                .dropped_pad_events = s_dropped_pad_events,
+            };
+        }
+        return false;
     }
 
     if (command->type == COMMAND_SET_PATTERN_MASK) {
@@ -189,6 +243,7 @@ static bool apply_command(metronome_core_t *core,
         metronome_core_set_running(core, !core->running);
         break;
     case COMMAND_TRIGGER_DRUM:
+    case COMMAND_CAPTURE_MARKER:
     case COMMAND_SET_PATTERN_MASK:
     case COMMAND_SET_PATTERN:
         break;
@@ -206,6 +261,7 @@ static void audio_task(void *arg)
     int16_t samples[AUDIO_FRAMES_PER_BLOCK * 2];
     metronome_core_t core;
     click_voice_t click = {0};
+    uint64_t audio_frame = 0;
 
     metronome_core_init(&core, METRONOME_SAMPLE_RATE_HZ,
                         METRONOME_PPQN, METRONOME_DEFAULT_BPM);
@@ -214,7 +270,7 @@ static void audio_task(void *arg)
     while (true) {
         metronome_command_t command;
         while (xQueueReceive(s_command_queue, &command, 0) == pdTRUE) {
-            if (apply_command(&core, &click, &command)) {
+            if (apply_command(&core, &click, &command, audio_frame)) {
                 publish_state(snapshot_from_core(
                     &core, (core.last_beat_index % 4U) == 0U));
             }
@@ -261,6 +317,7 @@ static void audio_task(void *arg)
             const int16_t sample = drum_mixer_soft_limit(mixed);
             samples[frame * 2] = sample;
             samples[frame * 2 + 1] = sample;
+            audio_frame++;
         }
 
         size_t bytes_written = 0;
@@ -358,6 +415,23 @@ esp_err_t metronome_app_subscribe(QueueHandle_t state_queue)
     return ESP_OK;
 }
 
+esp_err_t metronome_app_subscribe_pad_events(QueueHandle_t event_queue)
+{
+    if (event_queue == NULL || s_state_mutex == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (xSemaphoreTake(s_state_mutex, portMAX_DELAY) != pdTRUE) {
+        return ESP_FAIL;
+    }
+    if (s_pad_event_subscriber_count >= MAX_PAD_EVENT_SUBSCRIBERS) {
+        xSemaphoreGive(s_state_mutex);
+        return ESP_ERR_NO_MEM;
+    }
+    s_pad_event_subscribers[s_pad_event_subscriber_count++] = event_queue;
+    xSemaphoreGive(s_state_mutex);
+    return ESP_OK;
+}
+
 metronome_state_t metronome_app_get_state(void)
 {
     metronome_state_t state = s_state;
@@ -413,6 +487,40 @@ bool metronome_app_trigger_drum(uint8_t pad_index)
         return false;
     }
     return send_command(COMMAND_TRIGGER_DRUM, pad_index);
+}
+
+bool metronome_app_trigger_hardware_pad(uint8_t pad_index)
+{
+    if (pad_index >= DRUM_SAMPLE_COUNT) {
+        return false;
+    }
+    const metronome_command_t command = {
+        .type = COMMAND_TRIGGER_DRUM,
+        .value = pad_index,
+        .hardware_source = true,
+    };
+    return enqueue_command(&command);
+}
+
+bool metronome_app_capture_marker(metronome_capture_marker_t *marker)
+{
+    if (marker == NULL) {
+        return false;
+    }
+    TaskHandle_t caller = xTaskGetCurrentTaskHandle();
+    if (caller == NULL) {
+        return false;
+    }
+    (void)ulTaskNotifyTake(pdTRUE, 0);
+    metronome_command_t command = {
+        .type = COMMAND_CAPTURE_MARKER,
+        .completion_task = caller,
+        .marker_out = marker,
+    };
+    if (!enqueue_command(&command)) {
+        return false;
+    }
+    return ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100)) > 0U;
 }
 
 bool metronome_app_set_pattern_mask(uint8_t pad_index, uint16_t mask)

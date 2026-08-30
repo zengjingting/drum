@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "easyinput.pattern.explanation.v1",
+  "title": "EasyInput Pattern Explanation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "summary",
+    "styleCandidates",
+    "evidence",
+    "suggestion",
+    "limitations"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "easyinput.pattern.explanation.v1"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "styleCandidates": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["style", "confidence"],
+        "properties": {
+          "style": {"type": "string", "minLength": 1, "maxLength": 40},
+          "confidence": {"enum": ["high", "medium", "low"]}
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["track", "steps", "reason"],
+        "properties": {
+          "track": {
+            "enum": ["kick", "snare", "closed_hat", "open_hat", "clap", "rim"]
+          },
+          "steps": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {"type": "integer", "minimum": 1, "maximum": 16}
+          },
+          "reason": {"type": "string", "minLength": 1, "maxLength": 240}
+        }
+      }
+    },
+    "suggestion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "limitations": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300
+    }
+  }
+}

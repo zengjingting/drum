@@ -71,7 +71,7 @@ static void drum_pad_task(void *arg)
                 state->stable_pressed = state->raw_pressed;
                 const int8_t sample_index = s_pad_samples[index];
                 if (state->stable_pressed && sample_index >= 0 &&
-                    !metronome_app_trigger_drum((uint8_t)sample_index)) {
+                    !metronome_app_trigger_hardware_pad((uint8_t)sample_index)) {
                     ESP_LOGW(TAG, "S%u trigger queue full", (unsigned)index + 1U);
                 }
             }

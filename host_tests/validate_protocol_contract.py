@@ -8,9 +8,13 @@ web = (root / "main" / "web" / "app.js").read_text()
 
 required_firmware_fragments = (
     "#define PROTOCOL_VERSION 2",
-    r'\"capabilities\":[\"pattern\",\"trigger\",\"sequencer\"]',
+    r'\"capabilities\":[\"pattern\",\"trigger\",\"sequencer\",\"padEvents\"]',
     'send_ack("PATTERN")',
     '"PATTERN %u %u %u %u %u %u %c"',
+    'strcmp(command, "RECORD START") == 0',
+    'strcmp(command, "RECORD STOP") == 0',
+    r'\"type\":\"pad\"',
+    'metronome_app_subscribe_pad_events(s_pad_event_queue)',
 )
 for fragment in required_firmware_fragments:
     assert fragment in firmware, f"missing firmware contract: {fragment}"
@@ -20,6 +24,7 @@ required_web_fragments = (
     "capabilities.has('pattern')",
     "capabilities.has('trigger')",
     "capabilities.has('sequencer')",
+    "capabilities.has('padEvents')",
     "`PATTERN ${masks.join(' ')}`",
     "message.type === 'ack' && message.command === 'PATTERN'",
     "patternAckGate.acknowledge()",
@@ -32,4 +37,4 @@ assert "setConnection('error',message.message)" not in web, (
     "protocol errors must not be promoted to connection failures"
 )
 
-print("protocol_contract: v2 handshake, atomic PATTERN, ACK, error split verified")
+print("protocol_contract: v2 PATTERN and reliable pad recording extension verified")

@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 import threading
 import unittest
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 from eval.easyinput_eval.providers import (
     Availability,
@@ -15,7 +19,7 @@ from eval.easyinput_eval.providers import (
     ProviderError,
     ProviderResponse,
 )
-from web_server import MODEL_ID, PatternService, make_handler
+from web_server import MODEL_ID, PatternService, _load_local_environment, make_handler
 
 
 def valid_pattern() -> dict[str, Any]:
@@ -33,6 +37,40 @@ def valid_pattern() -> dict[str, Any]:
             "rim": [0] * 16,
         },
         "designNote": "Test-only response.",
+    }
+
+
+def explanation_request() -> dict[str, Any]:
+    pattern = valid_pattern()
+    return {
+        "bpm": pattern["bpm"],
+        "tracks": pattern["tracks"],
+        "approximateQuantization": True,
+    }
+
+
+def valid_explanation() -> dict[str, Any]:
+    return {
+        "schemaVersion": "easyinput.pattern.explanation.v1",
+        "summary": "这个 Pattern 更接近基础 Rock 律动。",
+        "styleCandidates": [
+            {"style": "Rock", "confidence": "high"},
+            {"style": "Pop", "confidence": "medium"},
+        ],
+        "evidence": [
+            {
+                "track": "snare",
+                "steps": [5, 13],
+                "reason": "军鼓落在第二和第四拍，形成清晰反拍。",
+            },
+            {
+                "track": "closed_hat",
+                "steps": [1, 3, 5, 7, 9, 11, 13, 15],
+                "reason": "闭镲保持稳定八分音符骨架。",
+            },
+        ],
+        "suggestion": "可以移动一个底鼓落点来增加切分感。",
+        "limitations": "只依据单小节鼓点，不能判断完整歌曲流派。",
     }
 
 
@@ -119,6 +157,40 @@ class ApiServer:
             return response.status, json.loads(response.read().decode("utf-8"))
 
 
+class LocalEnvironmentTests(unittest.TestCase):
+    def test_local_environment_loads_missing_value(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / ".env.local"
+            path.write_text(
+                "# local-only defaults\nDEEPSEEK_API_KEY=test-local-key\n",
+                encoding="utf-8",
+            )
+            with patch.dict(os.environ, {}, clear=True):
+                _load_local_environment(path)
+                self.assertEqual(os.environ["DEEPSEEK_API_KEY"], "test-local-key")
+
+    def test_process_environment_overrides_local_value(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / ".env.local"
+            path.write_text(
+                "DEEPSEEK_API_KEY=file-value-must-not-win\n",
+                encoding="utf-8",
+            )
+            with patch.dict(
+                os.environ, {"DEEPSEEK_API_KEY": "process-value"}, clear=True
+            ):
+                _load_local_environment(path)
+                self.assertEqual(os.environ["DEEPSEEK_API_KEY"], "process-value")
+
+    def test_invalid_local_environment_line_does_not_echo_value(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / ".env.local"
+            path.write_text("INVALID KEY=secret-must-not-leak\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, r"\.env\.local:1") as error:
+                _load_local_environment(path)
+            self.assertNotIn("secret-must-not-leak", str(error.exception))
+
+
 class PatternServiceApiTests(unittest.TestCase):
     def test_valid_first_response_returns_pattern_and_firmware_masks(self) -> None:
         adapter = SequenceAdapter([json.dumps(valid_pattern())])
@@ -191,6 +263,70 @@ class PatternServiceApiTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(payload["model"], MODEL_ID)
         self.assertEqual(payload["thinkingMode"], "disabled")
+
+    def test_explain_returns_features_and_evidence_checked_output(self) -> None:
+        adapter = SequenceAdapter([json.dumps(valid_explanation())])
+        with ApiServer(PatternService(adapter=adapter)) as api:
+            status, payload = api.request(
+                "/api/pattern/explain", {"pattern": explanation_request()}
+            )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["explanation"]["styleCandidates"][0]["style"], "Rock")
+        self.assertEqual(payload["features"]["snareBackbeatSteps"], [5, 13])
+        self.assertTrue(payload["firstPass"]["valid"])
+        self.assertEqual(adapter.calls, 1)
+
+    def test_explain_repairs_evidence_that_cites_inactive_step(self) -> None:
+        invalid = valid_explanation()
+        invalid["evidence"][0]["steps"] = [2]
+        adapter = SequenceAdapter(
+            [json.dumps(invalid), json.dumps(valid_explanation())]
+        )
+        with ApiServer(PatternService(adapter=adapter)) as api:
+            status, payload = api.request(
+                "/api/pattern/explain", {"pattern": explanation_request()}
+            )
+        self.assertEqual(status, 200)
+        self.assertFalse(payload["firstPass"]["valid"])
+        self.assertTrue(payload["repairAttempted"])
+        self.assertEqual(adapter.calls, 2)
+
+    def test_explain_repairs_english_user_visible_copy(self) -> None:
+        english = json.loads(json.dumps(valid_explanation()))
+        english["summary"] = "This is a basic rock groove."
+        english["evidence"][0]["reason"] = "The snare lands on the backbeat."
+        english["suggestion"] = "Move one kick to add syncopation."
+        english["limitations"] = "One bar is not enough to identify a full song."
+        adapter = SequenceAdapter(
+            [json.dumps(english), json.dumps(valid_explanation())]
+        )
+        with ApiServer(PatternService(adapter=adapter)) as api:
+            status, payload = api.request(
+                "/api/pattern/explain", {"pattern": explanation_request()}
+            )
+        self.assertEqual(status, 200)
+        self.assertFalse(payload["firstPass"]["valid"])
+        self.assertTrue(payload["repairAttempted"])
+        self.assertEqual(adapter.calls, 2)
+        self.assertIn("这个", payload["explanation"]["summary"])
+
+    def test_explain_rejects_empty_or_malformed_pattern(self) -> None:
+        adapter = SequenceAdapter([json.dumps(valid_explanation())])
+        empty = explanation_request()
+        empty["tracks"] = {key: [0] * 16 for key in empty["tracks"]}
+        with ApiServer(PatternService(adapter=adapter)) as api:
+            empty_status, empty_payload = api.request(
+                "/api/pattern/explain", {"pattern": empty}
+            )
+            malformed_status, malformed_payload = api.request(
+                "/api/pattern/explain", {"pattern": {"bpm": 120}}
+            )
+        self.assertEqual(empty_status, 400)
+        self.assertEqual(empty_payload["error"]["type"], "request_error")
+        self.assertEqual(malformed_status, 400)
+        self.assertEqual(malformed_payload["error"]["type"], "request_error")
+        self.assertEqual(adapter.calls, 0)
 
 
 if __name__ == "__main__":

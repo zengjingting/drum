@@ -14,6 +14,8 @@
 - 网页同步显示当前六个实体按键与音色的映射；实体按钮或网页试听触发时，对应音色卡片会高亮反馈。
 - 网页提供六轨、每轨 16 步的可编辑音序器。每步是 1/16 音符，固件每 24 个 PPQN tick 推进一步，并直接在 I2S 音频任务中触发音色，因此会跟随 40–240 BPM 的实时变化而不依赖浏览器计时。
 - 网页支持用中文描述生成 `easyinput.pattern.v1` 鼓点：本地代理调用非思考模式的 `deepseek-v4-flash`，复用评测 Harness 做严格结构校验、一次定向修复和 Mask 转换。生成只产生候选；点击“应用”后才填入已有的 16 步音序器，并在设备在线时等待 `PATTERN` ACK。播放仍由原有“开始/停止”按钮独立控制，应用后的手动改格继续实时同步硬件。
+- 网页支持录制实体 Pad 演奏：固件将每次物理触发作为带连续事件号和 I2S frame 的独立 USB 消息发送，网页在用户停止后才将整段演奏近似量化到唯一的六轨 16 步音序器。录制过程中不实时改格；快速事件漏失或队列溢出会阻断量化，而不是生成一份看似完整的 Pattern。
+- 当前 Pattern 可保存到浏览器本地并在刷新后恢复。用户可以让 DeepSeek 解释当前节奏的风格倾向；后端先提取确定性节奏特征，再要求模型用结构化 Schema 返回风格、置信度、引用实际音轨与步数的依据、修改建议和判断限制。模型只读取 Pattern，不读取或声称读取音频。
 - 128 声部非抢占混音允许多键和同键快速重触发自然叠加；新触发不会偷取或截断已经播放的声音。混音输出带 64-sample 尾部淡出和整数软限幅。
 - 针对实板小扬声器的频响，S1 已改用 ccMixter 的标准原声 Kick，PCM 预降 6 dB 并使用 unity 运行增益；S2 与 S7 已改用 Virtuosity Drums 的真实原声鼓录音：S2 是中等力度的中心军鼓并预降 3 dB，S7 是较暗的低保真麦克风闭镲，板载峰值比上一版明显降低；S4 采用 EasyInput Beatbox 的 40% 乐器电平开镲，并根据新自然鼓组的实板对比再降 4.5 dB；S5 采用其 88% 乐器电平与保守限幅的短尾 Clap，累计降低 10.5 dB；S6 采用其 82% 乐器电平与保守限幅的短尾 Rim，并预降 3 dB。总混音仍经软限幅，避免数字硬削波。
 - 编码器 A/B/按压=`GPIO17/16/18`：完成一次正交周期并回到稳定卡点后调 1 BPM，按压切换开始/停止，25 ms 按压消抖。
@@ -61,10 +63,26 @@ idf.py -p /dev/cu.<本次识别到的端口> flash monitor
 
 开发板刷入本固件并正常开机后，用一根支持数据传输的 USB 线连接电脑。先关闭 `idf.py monitor`、串口终端等占用端口的程序，然后在项目根目录启动本地网页：
 
+首次使用时，在仓库根目录创建仅供本机读取的 `.env.local`：
+
+```text
+DEEPSEEK_API_KEY=<在本机填写，不要提交到仓库>
+```
+
+`.env.local` 已被 Git 忽略。随后启动网页：
+
 ```bash
-export DEEPSEEK_API_KEY='<在本机终端输入，不要提交到仓库>'
 pnpm dev
 ```
+
+如果本机尚未安装 `pnpm`，可直接使用同一个后端入口：
+
+```bash
+python3 web_server.py
+```
+
+也可以在终端显式设置 `DEEPSEEK_API_KEY`；显式环境变量优先于
+`.env.local`，适合临时切换密钥或部署环境。
 
 用支持 Web Serial 的 Chromium 浏览器打开 `http://127.0.0.1:8765/`，点击右上角“连接设备”，在系统列表中选择 ESP32-S3 的 `USB JTAG/serial debug unit`（macOS 端口通常显示为 `/dev/cu.usbmodem...`）。连接成功后，网页的开始/停止和 BPM 按钮会直接控制开发板。
 
@@ -74,20 +92,27 @@ USB 行协议如下：
 
 ```text
 网页 -> 固件: STATE\n
-固件 -> 网页: {"type":"state","protocolVersion":2,"capabilities":["pattern","trigger","sequencer"],...}\n
+固件 -> 网页: {"type":"state","protocolVersion":2,"capabilities":["pattern","trigger","sequencer","padEvents"],...}\n
 网页 -> 固件: TOGGLE\n
 网页 -> 固件: BPM 120\n
 网页 -> 固件: PATTERN 4369 4112 21845 0 0 32768\n
 固件 -> 网页: {"type":"ack","command":"PATTERN"}\n
 网页 -> 固件: TRIGGER 1\n         # 试听 S1
 固件 -> 网页: {"type":"state","bpm":120,"running":true,"sequenceStep":0,"pattern":[4369,0,0,0,0,0],...}\n
+网页 -> 固件: RECORD START\n
+固件 -> 网页: {"type":"record","phase":"started","frame":480000,"lastEvent":10,"dropped":0}\n
+固件 -> 网页: {"type":"pad","event":11,"track":0,"frame":486000,"source":"hardware"}\n
+网页 -> 固件: RECORD STOP\n
+固件 -> 网页: {"type":"record","phase":"stopped","frame":576000,"lastEvent":11,"dropped":0}\n
 ```
 
 协议 v2 的 `PATTERN` 会将六轨 16-bit 掩码作为一个音频任务命令原子更新；音频任务完成应用并发布新状态后，USB 才返回 ACK。固件仍接受旧 `MASK <track> <mask>` 作为兼容入口，但当前网页不再逐轨发送。网页只有在 `STATE` 声明 `pattern`、`trigger`、`sequencer` 能力后才启用相应控件，并在收到 `PATTERN` ACK 后标记同步完成。协议错误显示在音序器区域，不会被误判为 USB 断线。
 
+`padEvents` 是协议 v2 的向后兼容能力扩展。网页只有看到该 capability 才启用录制。`RECORD START/STOP` 的边界与实体 Pad 消息都来自同一个连续 I2S frame 时钟；每次物理触发进入独立 FIFO，而不是复用只保留最新状态的覆盖队列。网页会核对起止事件号和累计丢失数，发现缺口时保留原 Pattern 并要求重录。网页试听 `TRIGGER` 和音序器自动播放不会进入实体录制。
+
 ### AI 鼓点生成
 
-`pnpm dev` 同时启动静态网页和仅监听 `127.0.0.1` 的 DeepSeek 代理。API 密钥只从后端进程的 `DEEPSEEK_API_KEY` 环境变量读取，不会写入前端、请求结果或测试快照。要在没有密钥或不消耗额度的情况下验证页面，用固定的本地响应启动：
+`pnpm dev` 同时启动静态网页和仅监听 `127.0.0.1` 的 DeepSeek 代理。后端启动时先读取本机 `.env.local` 作为默认值，再以进程中的 `DEEPSEEK_API_KEY` 覆盖；密钥不会写入前端、请求结果、日志或测试快照。要在没有密钥或不消耗额度的情况下验证页面，用固定的本地响应启动：
 
 ```bash
 pnpm run dev:mock
@@ -96,6 +121,16 @@ pnpm run dev:mock
 操作顺序是：输入中文描述 → 生成并校验候选 → 点击“应用” → 候选填入已有的六轨 16 步音序器 → 点击原有“开始”按钮播放。页面不再维护第二套 AI 音序图；主音序器是 AI 与手动编辑共用的唯一编辑面。设备在线时，“应用”会设置 BPM、发送单条原子 `PATTERN` 并等待 ACK，但不会自动启动；设备离线时仍可先应用到网页，连接后再自动同步。模型原始输出不会直接进入串口，服务端校验通过后网页还会复核 Schema 并重新计算六个 Mask。网络或网页断开不会进入 I2S 实时音频链路，开发板继续播放最后一次已确认的 Pattern。
 
 P0 的产品决策、交互状态、失败边界与验收口径记录在 `docs/ai-pattern-p0-product-decisions.md`。
+
+### 实体演奏录制与 AI 解释
+
+操作顺序是：连接支持 `padEvents` 的固件 → 确认音序器处于停止状态 → 点击“开始录制” → 在实体 Pad 上演奏 → 点击“停止录制” → 结果一次性进入现有音序器 → 手动校正、保存、AI 解释或点击“开始”播放。
+
+首版把录制开始到停止的设备 frame 区间线性近似映射为 16 步；同一音轨落在同一格的事件会合并，不同音轨可以共享一格。当前 BPM 不会根据录制长度自动改变。该方案只提供可编辑的近似量化，不保留力度、Swing 或微小时序，也不包装成精准转录。
+
+AI 解释请求使用 `easyinput.pattern.explanation.v1`，解释证据引用的音轨与步数必须在当前 Pattern 中真实触发，否则后端最多定向修复一次，仍失败就拒绝展示。修改 Pattern 或 BPM 后，旧解释会标记为对应修改前版本。DeepSeek 或网络失败不影响录制结果、编辑、保存与硬件播放。
+
+本阶段的完整决策、开发顺序、协议合同、风险和验收清单记录在 `docs/pad-recording-ai-explanation-mvp-decisions.md`。
 
 ## 本机确定性测试
 
