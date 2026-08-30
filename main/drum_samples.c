@@ -22,13 +22,18 @@ typedef struct {
 } embedded_sample_t;
 
 static const embedded_sample_t s_embedded[DRUM_SAMPLE_COUNT] = {
-    /* Per-voice board EQ compensates for the board's small speaker. */
-    {s1_kick_pcm_start, s1_kick_pcm_end, 81920, "kick"},
-    {s2_snare_pcm_start, s2_snare_pcm_end, 18022, "snare"},
-    {s3_closed_hihat_pcm_start, s3_closed_hihat_pcm_end, 98304, "closed hi-hat"},
-    {s4_open_hihat_pcm_start, s4_open_hihat_pcm_end, 13107, "open hi-hat"},
-    {s5_clap_pcm_start, s5_clap_pcm_end, 26214, "clap"},
-    {s6_rimshot_pcm_start, s6_rimshot_pcm_end, 58982, "rimshot"},
+    /* The ccMixter acoustic kick is level-prepared in the PCM. */
+    {s1_kick_pcm_start, s1_kick_pcm_end, 32768, "kick"},
+    /* Natural mid-mic snare; -3 dB preserves the previous board peak level. */
+    {s2_snare_pcm_start, s2_snare_pcm_end, 23198, "snare"},
+    /* The darker natural closed hat is level-prepared in the PCM. */
+    {s3_closed_hihat_pcm_start, s3_closed_hihat_pcm_end, 32768, "closed hi-hat"},
+    /* Beatbox's 40% open-hat is pre-rendered; -4.5 dB matches the natural kit. */
+    {s4_open_hihat_pcm_start, s4_open_hihat_pcm_end, 19519, "open hi-hat"},
+    /* Beatbox's voice/limiter are pre-rendered; -10.5 dB matches the natural kit. */
+    {s5_clap_pcm_start, s5_clap_pcm_end, 9782, "clap"},
+    /* Beatbox's Rim path is pre-rendered; -3 dB avoids a board level jump. */
+    {s6_rimshot_pcm_start, s6_rimshot_pcm_end, 23198, "rimshot"},
 };
 
 static drum_sample_t s_samples[DRUM_SAMPLE_COUNT];

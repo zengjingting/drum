@@ -1,0 +1,158 @@
+{
+  "experimentVersion": "easyinput-groove-eval.v1",
+  "requestDefaults": {
+    "schemaVersion": "easyinput.pattern-request.v1",
+    "grid": {
+      "beatsPerBar": 4,
+      "stepsPerBeat": 4,
+      "stepsPerBar": 16,
+      "humanStepNumbering": "1-16",
+      "beatSteps": [1, 5, 9, 13]
+    },
+    "tempo": {
+      "minBpm": 40,
+      "maxBpm": 240,
+      "defaultBpm": 120
+    },
+    "instruments": [
+      {"trackId": "kick", "name": "底鼓", "role": "低频节奏重心"},
+      {"trackId": "snare", "name": "军鼓", "role": "常用于第二和第四拍"},
+      {"trackId": "closed_hat", "name": "闭镲", "role": "短促的持续脉冲"},
+      {"trackId": "open_hat", "name": "开镲", "role": "较长延音与反拍强调"},
+      {"trackId": "clap", "name": "拍手", "role": "电子化拍手强调"},
+      {"trackId": "rim", "name": "鼓边击", "role": "尖锐短促的哒声"}
+    ],
+    "unsupportedFeatures": [
+      "velocity",
+      "swing",
+      "triplet",
+      "microtiming",
+      "instrumentsOutsideTheList"
+    ]
+  },
+  "cases": [
+    {
+      "caseId": "G-HOUSE",
+      "task": "generate",
+      "userPrompt": "生成一个 124 BPM 的 House 鼓点。底鼓保持四踩，闭镲提供稳定律动，整体适合舞蹈。",
+      "currentPattern": null,
+      "constraints": [
+        {"id": "bpm-124", "type": "bpm_equals", "value": 124},
+        {"id": "four-on-floor", "type": "track_exact_steps", "track": "kick", "steps": [1, 5, 9, 13]}
+      ]
+    },
+    {
+      "caseId": "G-FUNK",
+      "task": "generate",
+      "userPrompt": "生成一个 105 BPM 的 Funk 鼓点。军鼓保持第二、第四拍，底鼓需要有切分，但不要过密。",
+      "currentPattern": null,
+      "constraints": [
+        {"id": "bpm-105", "type": "bpm_equals", "value": 105},
+        {"id": "backbeat", "type": "track_steps_on", "track": "snare", "steps": [5, 13]},
+        {"id": "kick-density", "type": "track_count_range", "track": "kick", "min": 3, "max": 7},
+        {"id": "kick-syncopation", "type": "track_has_trigger_outside", "track": "kick", "steps": [1, 5, 9, 13]}
+      ]
+    },
+    {
+      "caseId": "G-COUNTRY",
+      "task": "generate",
+      "userPrompt": "生成一个 120 BPM 的 Country 鼓点。使用稳定的底鼓、军鼓 Backbeat 和八分音符闭镲，适合初学者演奏。",
+      "currentPattern": null,
+      "constraints": [
+        {"id": "bpm-120", "type": "bpm_equals", "value": 120},
+        {"id": "backbeat", "type": "track_steps_on", "track": "snare", "steps": [5, 13]},
+        {"id": "eighth-note-hat", "type": "track_exact_steps", "track": "closed_hat", "steps": [1, 3, 5, 7, 9, 11, 13, 15]}
+      ]
+    },
+    {
+      "caseId": "E-HOUSE",
+      "task": "edit",
+      "userPrompt": "将当前 House Pattern 第 3、7、11、15 步的闭镲替换为开镲。其他步骤、其他轨道和 BPM 必须保持不变。",
+      "currentPattern": {
+        "schemaVersion": "easyinput.pattern.v1",
+        "name": "Reference House",
+        "style": "house",
+        "bpm": 124,
+        "tracks": {
+          "kick": [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
+          "snare": [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
+          "closed_hat": [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0],
+          "open_hat": [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],
+          "clap": [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],
+          "rim": [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0]
+        }
+      },
+      "editPolicy": {
+        "mutableFields": ["tracks.closed_hat", "tracks.open_hat"],
+        "immutableFields": ["name", "style", "bpm", "tracks.kick", "tracks.snare", "tracks.clap", "tracks.rim"],
+        "mutableCells": [
+          {"track": "closed_hat", "steps": [3, 7, 11, 15]},
+          {"track": "open_hat", "steps": [3, 7, 11, 15]}
+        ]
+      },
+      "constraints": [
+        {"id": "close-hat-off", "type": "track_steps_value", "track": "closed_hat", "steps": [3, 7, 11, 15], "value": 0},
+        {"id": "open-hat-on", "type": "track_steps_value", "track": "open_hat", "steps": [3, 7, 11, 15], "value": 1}
+      ]
+    },
+    {
+      "caseId": "E-FUNK",
+      "task": "edit",
+      "userPrompt": "减少当前 Funk Pattern 的底鼓密度，但保留切分感。军鼓、闭镲、其他轨道和 BPM 必须保持不变。",
+      "currentPattern": {
+        "schemaVersion": "easyinput.pattern.v1",
+        "name": "Reference Funk",
+        "style": "funk",
+        "bpm": 105,
+        "tracks": {
+          "kick": [1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0],
+          "snare": [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
+          "closed_hat": [1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1],
+          "open_hat": [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],
+          "clap": [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],
+          "rim": [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0]
+        }
+      },
+      "editPolicy": {
+        "mutableFields": ["tracks.kick"],
+        "immutableFields": ["name", "style", "bpm", "tracks.snare", "tracks.closed_hat", "tracks.open_hat", "tracks.clap", "tracks.rim"]
+      },
+      "constraints": [
+        {"id": "kick-reduced", "type": "track_count_less_than_current", "track": "kick"},
+        {"id": "kick-syncopation-retained", "type": "track_has_trigger_outside", "track": "kick", "steps": [1, 5, 9, 13]}
+      ]
+    },
+    {
+      "caseId": "E-COUNTRY",
+      "task": "edit",
+      "userPrompt": "在当前 Country Pattern 的最后四步加入简化 Fill。只能修改 Kick、Snare 和 Rim 的第 13–16 步；前 12 步、其他轨道和 BPM 必须保持不变。",
+      "currentPattern": {
+        "schemaVersion": "easyinput.pattern.v1",
+        "name": "Reference Country",
+        "style": "country",
+        "bpm": 120,
+        "tracks": {
+          "kick": [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0],
+          "snare": [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
+          "closed_hat": [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0],
+          "open_hat": [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],
+          "clap": [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],
+          "rim": [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0]
+        }
+      },
+      "editPolicy": {
+        "mutableFields": ["tracks.kick", "tracks.snare", "tracks.rim"],
+        "immutableFields": ["name", "style", "bpm", "tracks.closed_hat", "tracks.open_hat", "tracks.clap"],
+        "mutableCells": [
+          {"track": "kick", "steps": [13, 14, 15, 16]},
+          {"track": "snare", "steps": [13, 14, 15, 16]},
+          {"track": "rim", "steps": [13, 14, 15, 16]}
+        ]
+      },
+      "constraints": [
+        {"id": "fill-density", "type": "tracks_count_range_in_steps", "tracks": ["kick", "snare", "rim"], "steps": [13, 14, 15, 16], "min": 3, "max": 12},
+        {"id": "rim-in-fill", "type": "track_count_range_in_steps", "track": "rim", "steps": [13, 14, 15, 16], "min": 1, "max": 4}
+      ]
+    }
+  ]
+}

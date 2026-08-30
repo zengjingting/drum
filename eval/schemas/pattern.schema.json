@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://easyinput.local/schemas/pattern.schema.json",
+  "title": "EasyInput 16-step drum pattern",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "name", "style", "bpm", "tracks"],
+  "properties": {
+    "schemaVersion": {
+      "const": "easyinput.pattern.v1"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "style": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "bpm": {
+      "type": "integer",
+      "minimum": 40,
+      "maximum": 240
+    },
+    "tracks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kick",
+        "snare",
+        "closed_hat",
+        "open_hat",
+        "clap",
+        "rim"
+      ],
+      "properties": {
+        "kick": {"$ref": "#/$defs/track"},
+        "snare": {"$ref": "#/$defs/track"},
+        "closed_hat": {"$ref": "#/$defs/track"},
+        "open_hat": {"$ref": "#/$defs/track"},
+        "clap": {"$ref": "#/$defs/track"},
+        "rim": {"$ref": "#/$defs/track"}
+      }
+    },
+    "designNote": {
+      "type": "string",
+      "maxLength": 300
+    }
+  },
+  "$defs": {
+    "track": {
+      "type": "array",
+      "minItems": 16,
+      "maxItems": 16,
+      "items": {
+        "type": "integer",
+        "enum": [0, 1]
+      }
+    }
+  }
+}

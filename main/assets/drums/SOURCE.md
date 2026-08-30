@@ -1,52 +1,91 @@
 # Board-resident drum PCM snapshot
 
-Three board-resident samples come from the FreePats synthesizer percussion sound
-bank, version `2022-07-18`, created by Roberto with Yoshimi and Geonkick and
-released under the Creative Commons CC0 1.0 public-domain dedication.
+The S1 kick comes from CM Music's Sample Drum Kit on ccMixter. The source page
+labels the archive and its individual WAV files as CC0.
 
-- Project page: <https://freepats.zenvoid.org/Percussion/electric-percussion.html>
-- Source archive: <https://freepats.zenvoid.org/Percussion/SynthesizerPercussion/SynthesizerPercussion-SFZ-20220718.7z>
-- Source archive SHA-256: `dbb2e5bb8268022fffa6dcc3d11a93368316038bf3ae81a965c58e9d490ed23b`
-- License snapshot: `LICENSE-CC0.txt`, copied byte-for-byte from the archive
+- Project page: <https://ccmixter.org/files/carbonmonoxidemusic/23425>
+- Source archive: <https://ccmixter.org/content/CarbonMonoxideMusic/CarbonMonoxideMusic_-_Drum_Kit_Samples.zip>
+- Source archive SHA-256: `80a37d6f3ed109a6c2d7b4dc40665604c6b0d7e7e28c6198d66739da8184c728`
+- Source WAV: `Sample Drum Kit/Kick.wav`
+- Source WAV SHA-256: `9faec713205af418607c1b06b232e271ecc94773a548837afc105fdfe8a2b8b9`
+- CC0 legal-code snapshot: `LICENSE-CC0.txt`
 
-The S1 kick, S7 closed hi-hat, and S6 rimshot come from Boochi44's Free Drum
-Samples repository. Its README states that all samples are CC0 1.0 while also
-asking redistributors to verify licensing. This repository therefore pins the
-exact upstream commit and keeps the complete README containing both statements.
+The S2 snare and S7 closed hi-hat come from Versilian Studios and Karoryfer
+Samples' Virtuosity Drums, a real contemporary-jazz drum kit released under
+CC0 1.0. The selected snare is a medium-high-velocity center hit from the mid
+microphone, while the selected hi-hat is a medium-velocity closed hit from the
+darker lo-fi microphone.
 
-- Project: <https://github.com/Boochi44/free-drum-samples>
-- Pinned commit: `77ba31428a079dd8f17c8e144c1e649ea0a198b3`
-- Licensing statement snapshot: `SOURCE-FREE-DRUM-SAMPLES-README.md`
-- Snapshot Git blob: `b9c52e91499b7f1cdd0fb3ab7a13debfffcd66b3`
-- Snapshot SHA-256: `054e540e5b7186bea1f99bc9718899bbfa1b7f3122b7802efff8a63f4aa51152`
+- Project: <https://github.com/sfzinstruments/virtuosity_drums>
+- Pinned commit: `9f04cf9a734527edfbb0a4eee1f674e45bbf71bc`
+- License snapshot: `SOURCE-VIRTUOSITY-LICENSE.txt`
+- License Git blob: `0e259d42c996742e9e3cba14c677129b2c1b6311`
+- License snapshot SHA-256: `a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499`
 
-| Pad | Source WAV | Git blob | Source WAV SHA-256 |
+| Pad | Source FLAC | Git blob | Source SHA-256 |
 | --- | --- | --- | --- |
-| S1 | `drum-samples/03-soulful-vintage/kicks/vintage-kick-01.wav` | `e6c41330f1a3af5412ba08592bc3fe423388edb0` | `7623b0357f54e90c9c85ef9570b7782e0ab5ef1287de45279f9ccb8e27d42dd6` |
-| S7 | `drum-samples/03-soulful-vintage/hi-hats/ch-lofi.wav` | `24a61ae3229dafa5f432fc7ecace6d6b5f034d1c` | `c1af239d645c4f6a4e769e10bde768bd2395f7a29ed60d68838ee77b7b98c984` |
-| S6 | `drum-samples/01-hard-trap/percs/perc-rimshot.wav` | `c5a54c77a27ed9776b74890b4ffe1016b1202e13` | `20d5cd385c0f8c3a24bbfe78c2e2747776841ede6185bc0fe93f97f0b455b89c` |
+| S2 | `Samples/mid/snare/mid_snare_center_vl28.flac` | `6b629c831c277b896bd512db61d0885cb4988dcc` | `f8df18766689f44fa92ca17980555fac7e462b2f9c7afd56ef703b24bef36e03` |
+| S7 | `Samples/lofi/hh/lofi_hh_closed_vl2_rr1.flac` | `e02a237af463232bed0e7a25b443a99ef64cbc22` | `d9424ee6b77c9c67f67f14a50fa611bf257f1b3f0380b0e06bb24e23311728e2` |
+
+The S4 open hi-hat, S5 clap, and S6 rim are derived from the speaker-tuned TR-707
+firmware RAW files in
+Zhaohan-Wang's EasyInput Beatbox repository. That repository traces the sample
+to `fluid-music/open-drums`; the pinned upstream `README.txt` states that all 15
+TR-707 samples are public domain. A text snapshot is retained as
+`SOURCE-TR707-README.txt`.
+
+- EasyInput Beatbox project: <https://github.com/Zhaohan-Wang/easyinput-beatbox>
+- Pinned EasyInput Beatbox commit: `9a0801a784bc3f97d15aa9f042dace9e83a99078`
+- Upstream source: <https://github.com/fluid-music/open-drums/tree/main/tr-707/TR707WAV>
+- Pinned upstream commit: `475cc3314fe06f6d1af02e9790ad9707c1f2b26b`
+
+| Pad | Input firmware RAW | RAW SHA-256 | Original WAV mapping | WAV SHA-256 |
+| --- | --- | --- | --- | --- |
+| S4 | `firmware/main/audio/samples/hihat_open.raw` | `34ea67af7b176385b50e0db2c18082458002d3a68925b9a669ca518a80e98b1b` | `HhO.wav` -> `assets/samples/tr707/hihat_open.wav` | `dac451389b3466494efa720f383db0546e033eb5185a7e53cd84d3d85fc10f5e` |
+| S5 | `firmware/main/audio/samples/clap.raw` | `4e6e16fa3e256dbbfbf590b81ecfa373f6f4a500d550b03236f60f7315a60c77` | `HandClap.wav` -> `assets/samples/tr707/clap.wav` | `8ed6c7acfd138d4ec8c526b09e0493cd7279e65df83e5f80e1d5ff6b4831eb26` |
+| S6 | `firmware/main/audio/samples/rim.raw` | `ada63a27dedc788f03e1dd089c035c745e11c11248b0a667c5953d4842e66005` | `RimShot.wav` -> `assets/samples/tr707/rim.wav` | `7098761c605af6bdb0f9e289ad1d3632c7990df9dccb57ea40fa8aafa6535e88` |
 
 ## Pad mapping
 
 | Pad | Board PCM | Original WAV | Duration | Output SHA-256 |
 | --- | --- | --- | ---: | --- |
-| S1 | `s1_kick.pcm` | Free Drum Samples `vintage-kick-01.wav` | 250 ms | `0af8b529636fc3e1185082a97dcb492d9d3475cb39ca9246e88534a025b2f1ec` |
-| S2 | `s2_snare.pcm` | `Snare09.wav` | 222 ms | `c4928e4fcaeb0cd3d040a90102a42be78738adc782f01665847de5b0e45341a0` |
-| S7 | `s3_closed_hihat.pcm` | Free Drum Samples `ch-lofi.wav` | 250 ms | `c0dc46c94e53773ee7b21ff03a86732a285add110a37f905d15c7ced7232830b` |
-| S4 | `s4_open_hihat.pcm` | `OpenHiHat02-01.wav` | 406 ms | `8deb049183fdeb281fc6bab4894ce188b53d0d48d55284aa476599d2881c2c8b` |
-| S5 | `s5_clap.pcm` | FreePats `Clap01.wav` | 853 ms | `c97cc58cbdb17af8a9399b0dd1bfb23516601de3cb9a0ff1304483ae8c3cddb1` |
-| S6 | `s6_rimshot.pcm` | Free Drum Samples `perc-rimshot.wav` | 250 ms | `3164c9e72d4116803b2095183cd824e78df5d5de9dfd20f63efedb07f5843852` |
+| S1 | `s1_kick.pcm` | ccMixter `Sample Drum Kit/Kick.wav` (gain -6 dB) | 456 ms | `74916dbb384460b6d2fecab5a98dfd3d79bf2c8782ed9ea3ae76bde3bf5371ad` |
+| S2 | `s2_snare.pcm` | Virtuosity Drums `mid_snare_center_vl28.flac` | 450 ms | `671cc38dada2efb2df57c502d114d234e128ea20cc1e586976edaaa81c4c6a52` |
+| S7 | `s3_closed_hihat.pcm` | Virtuosity Drums `lofi_hh_closed_vl2_rr1.flac` | 300 ms | `5063600d6f3746665da4f98d2cf2b546a36e81190aea5205888ac90b4ae8bad1` |
+| S4 | `s4_open_hihat.pcm` | EasyInput Beatbox speaker-tuned TR-707 `hihat_open.raw` | 326 ms | `af51b5971a5d28d53110da9d31367d764b6475ab11e5d4f93b6bef32f7cb9c56` |
+| S5 | `s5_clap.pcm` | EasyInput Beatbox speaker-tuned TR-707 `clap.raw` | 161 ms | `ce7dcfcedb033410992bf29e08b65a3b1c8e42c9cd4f2221b2c92ad42130fbae` |
+| S6 | `s6_rimshot.pcm` | EasyInput Beatbox speaker-tuned TR-707 `rim.raw` | 80 ms | `4e6fe5f7315acd0febb960b62fbf2a83bc2921808d0500aa9022e3eb3a33d710` |
 
 ## Board format
 
 Every file is headerless `48,000 Hz`, mono, signed `16-bit little-endian` PCM.
-The FreePats WAV files are already 48 kHz mono, so their conversion changes
-only the sample representation and removes the WAV container. The S1 and S7
-sources are 22.05 kHz mono PCM, while S6 is 44.1 kHz mono PCM; these three are
-resampled once to 48 kHz at build-asset preparation time. The firmware has no
-runtime decoder or resampler.
+The ccMixter S1 source is 44.1 kHz, stereo, signed 16-bit WAV. It is downmixed
+to mono, resampled once to 48 kHz, and reduced 6 dB to reproduce the accepted
+computer audition at unity Q15 runtime gain. The Virtuosity source files are
+48 kHz, 24-bit FLAC. S2 is downmixed from stereo to mono, trimmed to
+450 ms, and faded over the last 50 ms. S7 is mono, raised 18 dB before 16-bit
+quantization, trimmed to 300 ms, and faded over the last 50 ms. Its resulting
+board peak is still about 16 dB below the previous closed-hi-hat path. S6 is
+resampled once from 44.1 kHz to 48 kHz at build-asset preparation time.
 
-Reproduction command for each file:
+S4, S5, and S6 reproduce the EasyInput Beatbox full-velocity single-instrument
+outputs before resampling: multiply each 32 kHz signed-16-bit RAW by its
+instrument level (40% open hi-hat, 88% clap, 82% rim), then apply that firmware's
+integer limiter (`13000` linear threshold, `5000` headroom and `7000` knee
+denominator). The resulting signals are resampled by
+`scipy.signal.resample_poly` 3:2 with SciPy 1.17.1, rounded to the nearest
+integer and clipped to signed 16-bit. S2 uses Q15 gain `23198` (-3.0 dB) to
+match the previous board peak without preserving the TR-707 timbre. S7 uses
+unity Q15 gain because its lower level is prepared directly in the PCM. S4
+uses Q15 gain `19519` (-4.5 dB) on top of its pre-rendered 40% level to match
+the natural-kit board balance. After subsequent board auditions, S5 uses Q15
+gain `9782` (-10.5 dB) to balance its sustained clap energy with S2/S7 on the
+small speaker. S6 uses Q15 gain `23198`
+(-3.0 dB) to avoid a perceived level jump from its longer midrange body. This project's
+24576-threshold soft limiter leaves each single hit unchanged. The firmware has
+no runtime decoder or resampler.
+
+Generic reproduction command for the direct WAV conversions:
 
 ```sh
 ffmpeg -i SOURCE.wav -f s16le -acodec pcm_s16le -ar 48000 -ac 1 OUTPUT.pcm

@@ -1,0 +1,6 @@
+*
+!.gitignore
+!formal/
+!formal/formal-20260830-v1.jsonl
+!warmup/
+!warmup/formal-20260830-v1-warmup.jsonl

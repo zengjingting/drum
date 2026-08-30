@@ -9,3 +9,5 @@ host_tests/metronome_core_test
 host_tests/drum_mixer_test
 host_tests/encoder_decoder_test
 easyinput-board-cy/
+.env
+.env.*

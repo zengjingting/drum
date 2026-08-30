@@ -4,7 +4,7 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 firmware = (root / "main" / "usb_serial_control.c").read_text()
-web = (root / "main" / "web" / "index.html").read_text()
+web = (root / "main" / "web" / "app.js").read_text()
 
 required_firmware_fragments = (
     "#define PROTOCOL_VERSION 2",
@@ -16,12 +16,13 @@ for fragment in required_firmware_fragments:
     assert fragment in firmware, f"missing firmware contract: {fragment}"
 
 required_web_fragments = (
-    "const REQUIRED_PROTOCOL_VERSION=2",
+    "const REQUIRED_PROTOCOL_VERSION = 2",
     "capabilities.has('pattern')",
     "capabilities.has('trigger')",
     "capabilities.has('sequencer')",
-    "`PATTERN ${pattern.join(' ')}`",
-    "message.type==='ack'&&message.command==='PATTERN'",
+    "`PATTERN ${masks.join(' ')}`",
+    "message.type === 'ack' && message.command === 'PATTERN'",
+    "patternAckGate.acknowledge()",
 )
 for fragment in required_web_fragments:
     assert fragment in web, f"missing web contract: {fragment}"

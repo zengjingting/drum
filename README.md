@@ -13,8 +13,9 @@
 - S1、S2、S4–S7 是当前启用的低有效独立鼓垫，4 ms 消抖；S3 因硬件故障暂不触发，原 S3 闭镲迁移到 S7。按键通过同一条连续 I2S 音频链直接触发板载 PCM，即使节拍器处于停止状态也能演奏。
 - 网页同步显示当前六个实体按键与音色的映射；实体按钮或网页试听触发时，对应音色卡片会高亮反馈。
 - 网页提供六轨、每轨 16 步的可编辑音序器。每步是 1/16 音符，固件每 24 个 PPQN tick 推进一步，并直接在 I2S 音频任务中触发音色，因此会跟随 40–240 BPM 的实时变化而不依赖浏览器计时。
+- 网页支持用中文描述生成 `easyinput.pattern.v1` 鼓点：本地代理调用非思考模式的 `deepseek-v4-flash`，复用评测 Harness 做严格结构校验、一次定向修复和 Mask 转换。生成只产生候选；点击“应用”后才填入已有的 16 步音序器，并在设备在线时等待 `PATTERN` ACK。播放仍由原有“开始/停止”按钮独立控制，应用后的手动改格继续实时同步硬件。
 - 128 声部非抢占混音允许多键和同键快速重触发自然叠加；新触发不会偷取或截断已经播放的声音。混音输出带 64-sample 尾部淡出和整数软限幅。
-- 针对实板小扬声器的频响，S1 底鼓、S7 闭镲、S5 拍手和 S6 鼓边击使用独立 Q15 板级增益；S5 已下调约 4.5 dB，总混音仍经软限幅，避免数字硬削波。
+- 针对实板小扬声器的频响，S1 已改用 ccMixter 的标准原声 Kick，PCM 预降 6 dB 并使用 unity 运行增益；S2 与 S7 已改用 Virtuosity Drums 的真实原声鼓录音：S2 是中等力度的中心军鼓并预降 3 dB，S7 是较暗的低保真麦克风闭镲，板载峰值比上一版明显降低；S4 采用 EasyInput Beatbox 的 40% 乐器电平开镲，并根据新自然鼓组的实板对比再降 4.5 dB；S5 采用其 88% 乐器电平与保守限幅的短尾 Clap，累计降低 10.5 dB；S6 采用其 82% 乐器电平与保守限幅的短尾 Rim，并预降 3 dB。总混音仍经软限幅，避免数字硬削波。
 - 编码器 A/B/按压=`GPIO17/16/18`：完成一次正交周期并回到稳定卡点后调 1 BPM，按压切换开始/停止，25 ms 按压消抖。
 - 5 颗 WS2812 通过 GPIO12 显示 `0→1→2→3→4→3→2→1` 往返光点；事件来自 I2S 样本累计。
 - ESP32-S3 原生 USB Serial/JTAG 提供网页控制通道，不再创建 Wi-Fi AP，也不需要电脑切换网络。
@@ -25,18 +26,18 @@
 
 ## 板载鼓音色
 
-六种音色来自 FreePats `SynthesizerPercussion-SFZ-20220718` 和固定版本的 Free Drum Samples，两个上游均声明为 CC0 1.0。仓库保存统一转换为 48 kHz、单声道、signed 16-bit little-endian 的板载 PCM，无运行时解码或重采样。
+六种音色来自 ccMixter 的 CC0 Drum Kit、Virtuosity Drums 的 CC0 原声鼓录音，以及 EasyInput Beatbox 所使用的 public-domain TR-707 音色。仓库保存统一转换为 48 kHz、单声道、signed 16-bit little-endian 的板载 PCM，无运行时解码或重采样。
 
 | 按键 | GPIO | 音色 | 原始样本 |
 | --- | ---: | --- | --- |
-| S1 | 2 | Kick | `vintage-kick-01.wav` |
-| S2 | 47 | Snare | `Snare09.wav` |
-| S7 | 7 | Closed Hi-Hat | `ch-lofi.wav` |
-| S4 | 41 | Open Hi-Hat | `OpenHiHat02-01.wav` |
-| S5 | 1 | Clap | `Clap01.wav` |
-| S6 | 6 | Rimshot | `perc-rimshot.wav` |
+| S1 | 2 | Kick | ccMixter `Sample Drum Kit/Kick.wav`（候选 1） |
+| S2 | 47 | Snare | Virtuosity Drums `mid_snare_center_vl28.flac` |
+| S7 | 7 | Closed Hi-Hat | Virtuosity Drums `lofi_hh_closed_vl2_rr1.flac` |
+| S4 | 41 | Open Hi-Hat | EasyInput Beatbox speaker-tuned TR-707 `hihat_open.raw` |
+| S5 | 1 | Clap | EasyInput Beatbox speaker-tuned TR-707 `clap.raw` |
+| S6 | 6 | Rimshot | EasyInput Beatbox speaker-tuned TR-707 `rim.raw` |
 
-来源 URL、归档 SHA-256、逐文件映射、转换命令和输出哈希记录在 `main/assets/drums/SOURCE.md`，CC0 法律文本与上游许可声明快照保存在同目录。六个 PCM 总计约 209 KiB，并随应用镜像一起烧录到 Flash。
+来源 URL、固定提交、逐文件映射、转换参数和输出哈希记录在 `main/assets/drums/SOURCE.md`，CC0/公有领域法律文本与上游许可声明快照保存在同目录。六个 PCM 总计约 166 KiB，并随应用镜像一起烧录到 Flash。
 
 ## 构建
 
@@ -61,6 +62,7 @@ idf.py -p /dev/cu.<本次识别到的端口> flash monitor
 开发板刷入本固件并正常开机后，用一根支持数据传输的 USB 线连接电脑。先关闭 `idf.py monitor`、串口终端等占用端口的程序，然后在项目根目录启动本地网页：
 
 ```bash
+export DEEPSEEK_API_KEY='<在本机终端输入，不要提交到仓库>'
 pnpm dev
 ```
 
@@ -83,12 +85,26 @@ USB 行协议如下：
 
 协议 v2 的 `PATTERN` 会将六轨 16-bit 掩码作为一个音频任务命令原子更新；音频任务完成应用并发布新状态后，USB 才返回 ACK。固件仍接受旧 `MASK <track> <mask>` 作为兼容入口，但当前网页不再逐轨发送。网页只有在 `STATE` 声明 `pattern`、`trigger`、`sequencer` 能力后才启用相应控件，并在收到 `PATTERN` ACK 后标记同步完成。协议错误显示在音序器区域，不会被误判为 USB 断线。
 
+### AI 鼓点生成
+
+`pnpm dev` 同时启动静态网页和仅监听 `127.0.0.1` 的 DeepSeek 代理。API 密钥只从后端进程的 `DEEPSEEK_API_KEY` 环境变量读取，不会写入前端、请求结果或测试快照。要在没有密钥或不消耗额度的情况下验证页面，用固定的本地响应启动：
+
+```bash
+pnpm run dev:mock
+```
+
+操作顺序是：输入中文描述 → 生成并校验候选 → 点击“应用” → 候选填入已有的六轨 16 步音序器 → 点击原有“开始”按钮播放。页面不再维护第二套 AI 音序图；主音序器是 AI 与手动编辑共用的唯一编辑面。设备在线时，“应用”会设置 BPM、发送单条原子 `PATTERN` 并等待 ACK，但不会自动启动；设备离线时仍可先应用到网页，连接后再自动同步。模型原始输出不会直接进入串口，服务端校验通过后网页还会复核 Schema 并重新计算六个 Mask。网络或网页断开不会进入 I2S 实时音频链路，开发板继续播放最后一次已确认的 Pattern。
+
+P0 的产品决策、交互状态、失败边界与验收口径记录在 `docs/ai-pattern-p0-product-decisions.md`。
+
 ## 本机确定性测试
 
 计时核心和 PCM 混音器都是与 ESP-IDF 解耦的纯 C 组件，可以先在主机验证 120 BPM 精确样本间距、137 BPM 分数相位、96 PPQN 计数、四灯/五灯往返序列、停止重启，以及鼓声叠加、同音重复触发、128 声部容量、尾部淡出和软限幅：
 
 ```bash
 sh host_tests/run_tests.sh
+pnpm run test:web
+python3 -m unittest discover -s eval/tests -v
 ```
 
 ## 仍需真机确认

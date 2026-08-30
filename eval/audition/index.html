@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="EasyInput 鼓点单人盲听 Pilot">
+  <title>EasyInput 鼓点盲听 Pilot</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p id="studyMode" class="eyebrow">SINGLE-PERSON PILOT · 12 SAMPLES</p>
+        <h1>鼓点盲听</h1>
+        <p class="muted">模型信息已隐藏；评分只保存在本页并由你复制或下载，不会自动上传。</p>
+      </div>
+      <button id="connectButton" class="secondary" type="button">连接 USB 设备</button>
+    </header>
+
+    <nav class="dataset-switch" aria-label="盲听数据集">
+      <a href="./" data-dataset-link="v1">原始 Pilot v1</a>
+      <a href="?dataset=blind-v2" data-dataset-link="blind-v2">整套音色与增益复测 v2</a>
+    </nav>
+
+    <section id="revisionNotice" class="revision-notice" aria-label="复测说明" hidden>
+      <strong id="retestTitle">Post-hoc 复测</strong>
+      <span id="retestDescription">正在读取本轮复测定义；结果必须与 blind-v1 分开保存和报告，不能替代原 Pilot。</span>
+    </section>
+
+    <section class="status-card" aria-live="polite">
+      <span id="connectionDot" class="dot"></span>
+      <span id="connectionStatus">尚未连接</span>
+      <span class="spacer"></span>
+      <span id="persistenceStatus" class="persistence-status">本机暂存：待加载</span>
+      <span id="progressStatus">加载样本…</span>
+    </section>
+
+    <section class="sample-card" aria-labelledby="blindId">
+      <div class="sample-head">
+        <div>
+          <p class="label">盲样</p>
+          <h2 id="blindId">—</h2>
+        </div>
+        <span id="bpmBadge" class="badge">— BPM</span>
+      </div>
+      <p class="label">任务提示</p>
+      <p id="taskPrompt" class="prompt">正在读取样本…</p>
+      <div class="transport">
+        <button id="playButton" class="primary" type="button" disabled>播放</button>
+        <button id="replayButton" type="button" disabled>重听</button>
+        <button id="stopButton" type="button" disabled>停止</button>
+      </div>
+      <p id="deviceMessage" class="muted" role="status">连接后，只有点击播放、重听或停止才会控制硬件。</p>
+    </section>
+
+    <section class="rating-card" aria-labelledby="ratingTitle">
+      <h2 id="ratingTitle">听感评分</h2>
+      <p class="muted">每项 1–5 分。请根据实际听感独立判断。</p>
+      <div id="ratings"></div>
+    </section>
+
+    <nav class="navigation" aria-label="盲样导航">
+      <button id="previousButton" type="button" disabled>上一条</button>
+      <button id="nextButton" type="button" disabled>下一条</button>
+      <span class="spacer"></span>
+      <button id="copyButton" type="button" disabled>复制 JSON</button>
+      <button id="downloadButton" class="primary" type="button" disabled>下载评分 JSON</button>
+    </nav>
+
+    <section id="exportPanel" class="export-panel" aria-labelledby="exportTitle" hidden>
+      <h2 id="exportTitle">评分结果备份</h2>
+      <p id="exportStatus" class="muted" role="status">评分已在本浏览器中暂存。请复制或下载 JSON 留存。</p>
+      <textarea id="resultJson" readonly spellcheck="false" aria-label="完整评分 JSON"></textarea>
+    </section>
+  </main>
+</body>
+</html>

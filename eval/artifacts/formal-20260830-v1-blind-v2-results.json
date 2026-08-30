@@ -1,0 +1,149 @@
+{
+  "schemaVersion": "easyinput.audition-results.v1",
+  "studyDesign": "single-person-post-hoc-retest",
+  "datasetId": "blind-v2",
+  "postHoc": true,
+  "condition": "post_hoc_full_kit_replacement_and_gain_rebalance_retest",
+  "retestDesign": "post_hoc_full_kit_replacement_and_gain_rebalance_retest",
+  "sessionId": "73af0367-ec14-42fd-b06b-5b84f1fef7af",
+  "sourceSessionId": "formal-20260830-v1",
+  "orderVersion": "blind-v2",
+  "orderFingerprint": "9c76decd2eec4cc4397a618e04cab608b0ee2254e3623cc04c789633cbcf1710",
+  "startedAt": "2026-08-30T08:41:15.197Z",
+  "completedAt": "2026-08-30T08:44:02.575Z",
+  "deviceProtocolVersion": 2,
+  "ratings": [
+    {
+      "blindOrder": 1,
+      "blindId": "BLIND-01",
+      "taskId": "TASK-G-COUNTRY",
+      "styleRecognition": 4,
+      "grooveNaturalness": 3,
+      "willingnessToUse": 3,
+      "ratedAt": "2026-08-30T08:41:34.005Z",
+      "playCount": 1,
+      "replayCount": 0
+    },
+    {
+      "blindOrder": 2,
+      "blindId": "BLIND-02",
+      "taskId": "TASK-E-HOUSE",
+      "styleRecognition": 4,
+      "grooveNaturalness": 4,
+      "willingnessToUse": 4,
+      "ratedAt": "2026-08-30T08:41:44.900Z",
+      "playCount": 1,
+      "replayCount": 0
+    },
+    {
+      "blindOrder": 3,
+      "blindId": "BLIND-03",
+      "taskId": "TASK-E-COUNTRY",
+      "styleRecognition": 5,
+      "grooveNaturalness": 5,
+      "willingnessToUse": 4,
+      "ratedAt": "2026-08-30T08:42:00.375Z",
+      "playCount": 1,
+      "replayCount": 0
+    },
+    {
+      "blindOrder": 4,
+      "blindId": "BLIND-04",
+      "taskId": "TASK-E-FUNK",
+      "styleRecognition": 4,
+      "grooveNaturalness": 5,
+      "willingnessToUse": 4,
+      "ratedAt": "2026-08-30T08:42:20.713Z",
+      "playCount": 1,
+      "replayCount": 0
+    },
+    {
+      "blindOrder": 5,
+      "blindId": "BLIND-05",
+      "taskId": "TASK-G-FUNK",
+      "styleRecognition": 5,
+      "grooveNaturalness": 5,
+      "willingnessToUse": 5,
+      "ratedAt": "2026-08-30T08:42:30.129Z",
+      "playCount": 1,
+      "replayCount": 0
+    },
+    {
+      "blindOrder": 6,
+      "blindId": "BLIND-06",
+      "taskId": "TASK-G-HOUSE",
+      "styleRecognition": 4,
+      "grooveNaturalness": 4,
+      "willingnessToUse": 4,
+      "ratedAt": "2026-08-30T08:42:54.388Z",
+      "playCount": 1,
+      "replayCount": 0
+    },
+    {
+      "blindOrder": 7,
+      "blindId": "BLIND-07",
+      "taskId": "TASK-E-FUNK",
+      "styleRecognition": 5,
+      "grooveNaturalness": 3,
+      "willingnessToUse": 3,
+      "ratedAt": "2026-08-30T08:43:05.571Z",
+      "playCount": 1,
+      "replayCount": 0
+    },
+    {
+      "blindOrder": 8,
+      "blindId": "BLIND-08",
+      "taskId": "TASK-G-COUNTRY",
+      "styleRecognition": 4,
+      "grooveNaturalness": 4,
+      "willingnessToUse": 2,
+      "ratedAt": "2026-08-30T08:43:22.492Z",
+      "playCount": 1,
+      "replayCount": 0
+    },
+    {
+      "blindOrder": 9,
+      "blindId": "BLIND-09",
+      "taskId": "TASK-E-HOUSE",
+      "styleRecognition": 4,
+      "grooveNaturalness": 3,
+      "willingnessToUse": 3,
+      "ratedAt": "2026-08-30T08:43:29.837Z",
+      "playCount": 1,
+      "replayCount": 0
+    },
+    {
+      "blindOrder": 10,
+      "blindId": "BLIND-10",
+      "taskId": "TASK-G-FUNK",
+      "styleRecognition": 4,
+      "grooveNaturalness": 4,
+      "willingnessToUse": 4,
+      "ratedAt": "2026-08-30T08:43:38.937Z",
+      "playCount": 1,
+      "replayCount": 0
+    },
+    {
+      "blindOrder": 11,
+      "blindId": "BLIND-11",
+      "taskId": "TASK-G-HOUSE",
+      "styleRecognition": 5,
+      "grooveNaturalness": 5,
+      "willingnessToUse": 5,
+      "ratedAt": "2026-08-30T08:43:47.021Z",
+      "playCount": 1,
+      "replayCount": 0
+    },
+    {
+      "blindOrder": 12,
+      "blindId": "BLIND-12",
+      "taskId": "TASK-E-COUNTRY",
+      "styleRecognition": 4,
+      "grooveNaturalness": 3,
+      "willingnessToUse": 3,
+      "ratedAt": "2026-08-30T08:44:02.575Z",
+      "playCount": 1,
+      "replayCount": 0
+    }
+  ]
+}

@@ -5,12 +5,12 @@ from pathlib import Path
 
 
 EXPECTED = {
-    "s1_kick.pcm": (24004, "0af8b529636fc3e1185082a97dcb492d9d3475cb39ca9246e88534a025b2f1ec"),
-    "s2_snare.pcm": (21308, "c4928e4fcaeb0cd3d040a90102a42be78738adc782f01665847de5b0e45341a0"),
-    "s3_closed_hihat.pcm": (24004, "c0dc46c94e53773ee7b21ff03a86732a285add110a37f905d15c7ced7232830b"),
-    "s4_open_hihat.pcm": (39010, "8deb049183fdeb281fc6bab4894ce188b53d0d48d55284aa476599d2881c2c8b"),
-    "s5_clap.pcm": (81920, "c97cc58cbdb17af8a9399b0dd1bfb23516601de3cb9a0ff1304483ae8c3cddb1"),
-    "s6_rimshot.pcm": (24004, "3164c9e72d4116803b2095183cd824e78df5d5de9dfd20f63efedb07f5843852"),
+    "s1_kick.pcm": (43730, "74916dbb384460b6d2fecab5a98dfd3d79bf2c8782ed9ea3ae76bde3bf5371ad"),
+    "s2_snare.pcm": (43200, "671cc38dada2efb2df57c502d114d234e128ea20cc1e586976edaaa81c4c6a52"),
+    "s3_closed_hihat.pcm": (28800, "5063600d6f3746665da4f98d2cf2b546a36e81190aea5205888ac90b4ae8bad1"),
+    "s4_open_hihat.pcm": (31288, "af51b5971a5d28d53110da9d31367d764b6475ab11e5d4f93b6bef32f7cb9c56"),
+    "s5_clap.pcm": (15448, "ce7dcfcedb033410992bf29e08b65a3b1c8e42c9cd4f2221b2c92ad42130fbae"),
+    "s6_rimshot.pcm": (7726, "4e6fe5f7315acd0febb960b62fbf2a83bc2921808d0500aa9022e3eb3a33d710"),
 }
 
 

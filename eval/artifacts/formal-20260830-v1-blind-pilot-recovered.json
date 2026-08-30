@@ -1,0 +1,144 @@
+{
+  "schemaVersion": "easyinput.audition-recovered-ratings.v1",
+  "sourceSessionId": "formal-20260830-v1",
+  "studyDesign": "single-person-pilot",
+  "status": "as_observed_confounded_single_person_pilot",
+  "capture": {
+    "method": "read_only_dom_traversal_after_blob_download_not_observed",
+    "capturedAt": "2026-08-30T08:05:01Z",
+    "completedSamples": 12,
+    "expectedSamples": 12,
+    "allRatingValuesValid": true,
+    "omittedUnavailableFields": [
+      "browserSessionId",
+      "startedAt",
+      "completedAt",
+      "ratedAt",
+      "playCount",
+      "replayCount",
+      "deviceProtocolVersion"
+    ],
+    "note": "The page showed 12/12 completed ratings, but its Blob download did not produce a filesystem artifact. Only the checked form values were recovered; unavailable fields were not inferred."
+  },
+  "ratings": [
+    {
+      "blindOrder": 1,
+      "blindId": "BLIND-01",
+      "taskId": "TASK-G-HOUSE",
+      "styleRecognition": 4,
+      "grooveNaturalness": 3,
+      "willingnessToUse": 2
+    },
+    {
+      "blindOrder": 2,
+      "blindId": "BLIND-02",
+      "taskId": "TASK-E-COUNTRY",
+      "styleRecognition": 2,
+      "grooveNaturalness": 1,
+      "willingnessToUse": 1
+    },
+    {
+      "blindOrder": 3,
+      "blindId": "BLIND-03",
+      "taskId": "TASK-G-FUNK",
+      "styleRecognition": 5,
+      "grooveNaturalness": 4,
+      "willingnessToUse": 4
+    },
+    {
+      "blindOrder": 4,
+      "blindId": "BLIND-04",
+      "taskId": "TASK-G-COUNTRY",
+      "styleRecognition": 4,
+      "grooveNaturalness": 3,
+      "willingnessToUse": 3
+    },
+    {
+      "blindOrder": 5,
+      "blindId": "BLIND-05",
+      "taskId": "TASK-E-HOUSE",
+      "styleRecognition": 4,
+      "grooveNaturalness": 3,
+      "willingnessToUse": 3
+    },
+    {
+      "blindOrder": 6,
+      "blindId": "BLIND-06",
+      "taskId": "TASK-E-FUNK",
+      "styleRecognition": 4,
+      "grooveNaturalness": 3,
+      "willingnessToUse": 3
+    },
+    {
+      "blindOrder": 7,
+      "blindId": "BLIND-07",
+      "taskId": "TASK-G-COUNTRY",
+      "styleRecognition": 4,
+      "grooveNaturalness": 3,
+      "willingnessToUse": 3
+    },
+    {
+      "blindOrder": 8,
+      "blindId": "BLIND-08",
+      "taskId": "TASK-E-COUNTRY",
+      "styleRecognition": 4,
+      "grooveNaturalness": 4,
+      "willingnessToUse": 4
+    },
+    {
+      "blindOrder": 9,
+      "blindId": "BLIND-09",
+      "taskId": "TASK-G-HOUSE",
+      "styleRecognition": 4,
+      "grooveNaturalness": 4,
+      "willingnessToUse": 3
+    },
+    {
+      "blindOrder": 10,
+      "blindId": "BLIND-10",
+      "taskId": "TASK-E-HOUSE",
+      "styleRecognition": 4,
+      "grooveNaturalness": 4,
+      "willingnessToUse": 5
+    },
+    {
+      "blindOrder": 11,
+      "blindId": "BLIND-11",
+      "taskId": "TASK-E-FUNK",
+      "styleRecognition": 4,
+      "grooveNaturalness": 5,
+      "willingnessToUse": 5
+    },
+    {
+      "blindOrder": 12,
+      "blindId": "BLIND-12",
+      "taskId": "TASK-G-FUNK",
+      "styleRecognition": 4,
+      "grooveNaturalness": 5,
+      "willingnessToUse": 5
+    }
+  ],
+  "confounds": [
+    {
+      "confoundId": "CF-01",
+      "status": "suspected",
+      "factor": "closed_hat_playback_timbre",
+      "discoveredDuring": "single_person_hardware_blind_pilot",
+      "evaluatorObservation": "The current closed-hat PCM sounded overly sharp in the high frequencies and too prominent, which reduced willingness to use and could interfere with judging the arrangement.",
+      "affectedMetrics": [
+        "styleRecognition",
+        "grooveNaturalness",
+        "willingnessToUse"
+      ],
+      "unaffectedMetrics": [
+        "schema",
+        "constraints",
+        "maskConversion",
+        "latency",
+        "patternAck"
+      ],
+      "affectedSamples": 12,
+      "evidenceBoundary": "This is an evaluator-reported playback confound, not a measured frequency-response or loudness result. Device STATE cannot verify the flashed firmware or PCM asset hash."
+    }
+  ]
+}

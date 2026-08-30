@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://easyinput.local/schemas/pattern-request.schema.json",
+  "title": "EasyInput pattern generation request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "task",
+    "userPrompt",
+    "grid",
+    "tempo",
+    "instruments",
+    "unsupportedFeatures",
+    "currentPattern"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "easyinput.pattern-request.v1"
+    },
+    "task": {
+      "enum": ["generate", "edit"]
+    },
+    "userPrompt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "grid": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "beatsPerBar",
+        "stepsPerBeat",
+        "stepsPerBar",
+        "humanStepNumbering",
+        "beatSteps"
+      ],
+      "properties": {
+        "beatsPerBar": {"const": 4},
+        "stepsPerBeat": {"const": 4},
+        "stepsPerBar": {"const": 16},
+        "humanStepNumbering": {"const": "1-16"},
+        "beatSteps": {"const": [1, 5, 9, 13]}
+      }
+    },
+    "tempo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minBpm", "maxBpm", "defaultBpm"],
+      "properties": {
+        "minBpm": {"const": 40},
+        "maxBpm": {"const": 240},
+        "defaultBpm": {"const": 120}
+      }
+    },
+    "instruments": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["trackId", "name", "role"],
+        "properties": {
+          "trackId": {
+            "enum": [
+              "kick",
+              "snare",
+              "closed_hat",
+              "open_hat",
+              "clap",
+              "rim"
+            ]
+          },
+          "name": {"type": "string", "minLength": 1},
+          "role": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "unsupportedFeatures": {
+      "const": [
+        "velocity",
+        "swing",
+        "triplet",
+        "microtiming",
+        "instrumentsOutsideTheList"
+      ]
+    },
+    "currentPattern": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "pattern.schema.json"}
+      ]
+    },
+    "editPolicy": {
+      "$ref": "#/$defs/editPolicy"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"task": {"const": "generate"}},
+        "required": ["task"]
+      },
+      "then": {
+        "properties": {"currentPattern": {"type": "null"}},
+        "not": {"required": ["editPolicy"]}
+      }
+    },
+    {
+      "if": {
+        "properties": {"task": {"const": "edit"}},
+        "required": ["task"]
+      },
+      "then": {
+        "required": ["editPolicy"],
+        "properties": {
+          "currentPattern": {"$ref": "pattern.schema.json"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "fieldPath": {
+      "type": "string",
+      "pattern": "^(name|style|bpm|tracks\\.(kick|snare|closed_hat|open_hat|clap|rim))$"
+    },
+    "mutableCellSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["track", "steps"],
+      "properties": {
+        "track": {
+          "enum": [
+            "kick",
+            "snare",
+            "closed_hat",
+            "open_hat",
+            "clap",
+            "rim"
+          ]
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "integer", "minimum": 1, "maximum": 16}
+        }
+      }
+    },
+    "editPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mutableFields", "immutableFields"],
+      "properties": {
+        "mutableFields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/fieldPath"}
+        },
+        "immutableFields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/fieldPath"}
+        },
+        "mutableCells": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/mutableCellSet"}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,135 @@
+{
+  "schemaVersion": "easyinput.audition-cases.v1",
+  "sourceSessionId": "formal-20260830-v1",
+  "studyDesign": "single-person-pilot",
+  "condition": "post_hoc_full_kit_replacement_and_gain_rebalance_retest",
+  "retestDesign": "post_hoc_full_kit_replacement_and_gain_rebalance_retest",
+  "audioCondition": {
+    "changeScope": "full_kit_replacement_and_gain_rebalance",
+    "currentAssetManifestSha256": "a1156f906ccbdafa19c83426469bf0f8f46bc87f7a432237be10f4e0377d13c4",
+    "baselineAssetManifestSha256": "6ce669953a788076365e33a391b2d237f5efc67d0a89a3a836438a91d91589bb",
+    "closedHatPcmPath": "main/assets/drums/s3_closed_hihat.pcm",
+    "closedHatPcmSha256": "5063600d6f3746665da4f98d2cf2b546a36e81190aea5205888ac90b4ae8bad1",
+    "baselineBlindV1ClosedHatPcmSha256": "c0dc46c94e53773ee7b21ff03a86732a285add110a37f905d15c7ced7232830b"
+  },
+  "sampleCount": 12,
+  "trackOrder": [
+    "kick",
+    "snare",
+    "closed_hat",
+    "open_hat",
+    "clap",
+    "rim"
+  ],
+  "randomization": {
+    "method": "provider-alternating-sha256-with-spaced-extreme-exposure-slots",
+    "orderVersion": "blind-v2",
+    "seedCommitment": "sha256:742b055d738eebdfe7c9747b9dc2d01ba1ee862fb87b085f20b0281969dff74e",
+    "orderFingerprint": "9c76decd2eec4cc4397a618e04cab608b0ee2254e3623cc04c789633cbcf1710",
+    "constraints": {
+      "hiddenProviderGroupsAlternate": true,
+      "extremeClosedHatThresholdHitsPerBar": 12,
+      "extremeExposurePositions": [4, 7, 10],
+      "lastSampleIsExtremeExposure": false,
+      "minimumSameTaskSeparation": 3
+    }
+  },
+  "samples": [
+    {
+      "blindId": "BLIND-01",
+      "taskId": "TASK-G-COUNTRY",
+      "task": "generate",
+      "prompt": "生成一个 120 BPM 的 Country 鼓点。使用稳定的底鼓、军鼓 Backbeat 和八分音符闭镲，适合初学者演奏。",
+      "bpm": 120,
+      "masks": [1089, 4112, 21845, 32768, 0, 0]
+    },
+    {
+      "blindId": "BLIND-02",
+      "taskId": "TASK-E-HOUSE",
+      "task": "edit",
+      "prompt": "将当前 House Pattern 第 3、7、11、15 步的闭镲替换为开镲。其他步骤、其他轨道和 BPM 必须保持不变。",
+      "bpm": 124,
+      "masks": [4369, 4112, 4369, 17476, 0, 0]
+    },
+    {
+      "blindId": "BLIND-03",
+      "taskId": "TASK-E-COUNTRY",
+      "task": "edit",
+      "prompt": "在当前 Country Pattern 的最后四步加入简化 Fill。只能修改 Kick、Snare 和 Rim 的第 13–16 步；前 12 步、其他轨道和 BPM 必须保持不变。",
+      "bpm": 120,
+      "masks": [4353, 53264, 21845, 0, 0, 8192]
+    },
+    {
+      "blindId": "BLIND-04",
+      "taskId": "TASK-E-FUNK",
+      "task": "edit",
+      "prompt": "减少当前 Funk Pattern 的底鼓密度，但保留切分感。军鼓、闭镲、其他轨道和 BPM 必须保持不变。",
+      "bpm": 105,
+      "masks": [18497, 4112, 65535, 0, 0, 0]
+    },
+    {
+      "blindId": "BLIND-05",
+      "taskId": "TASK-G-FUNK",
+      "task": "generate",
+      "prompt": "生成一个 105 BPM 的 Funk 鼓点。军鼓保持第二、第四拍，底鼓需要有切分，但不要过密。",
+      "bpm": 105,
+      "masks": [1089, 4112, 54613, 16384, 4112, 520]
+    },
+    {
+      "blindId": "BLIND-06",
+      "taskId": "TASK-G-HOUSE",
+      "task": "generate",
+      "prompt": "生成一个 124 BPM 的 House 鼓点。底鼓保持四踩，闭镲提供稳定律动，整体适合舞蹈。",
+      "bpm": 124,
+      "masks": [4369, 4112, 21845, 0, 4112, 0]
+    },
+    {
+      "blindId": "BLIND-07",
+      "taskId": "TASK-E-FUNK",
+      "task": "edit",
+      "prompt": "减少当前 Funk Pattern 的底鼓密度，但保留切分感。军鼓、闭镲、其他轨道和 BPM 必须保持不变。",
+      "bpm": 105,
+      "masks": [321, 4112, 65535, 0, 0, 0]
+    },
+    {
+      "blindId": "BLIND-08",
+      "taskId": "TASK-G-COUNTRY",
+      "task": "generate",
+      "prompt": "生成一个 120 BPM 的 Country 鼓点。使用稳定的底鼓、军鼓 Backbeat 和八分音符闭镲，适合初学者演奏。",
+      "bpm": 120,
+      "masks": [4369, 4112, 21845, 0, 0, 0]
+    },
+    {
+      "blindId": "BLIND-09",
+      "taskId": "TASK-E-HOUSE",
+      "task": "edit",
+      "prompt": "将当前 House Pattern 第 3、7、11、15 步的闭镲替换为开镲。其他步骤、其他轨道和 BPM 必须保持不变。",
+      "bpm": 124,
+      "masks": [4369, 4112, 4369, 17476, 0, 0]
+    },
+    {
+      "blindId": "BLIND-10",
+      "taskId": "TASK-G-FUNK",
+      "task": "generate",
+      "prompt": "生成一个 105 BPM 的 Funk 鼓点。军鼓保持第二、第四拍，底鼓需要有切分，但不要过密。",
+      "bpm": 105,
+      "masks": [37449, 4112, 65535, 0, 0, 0]
+    },
+    {
+      "blindId": "BLIND-11",
+      "taskId": "TASK-G-HOUSE",
+      "task": "generate",
+      "prompt": "生成一个 124 BPM 的 House 鼓点。底鼓保持四踩，闭镲提供稳定律动，整体适合舞蹈。",
+      "bpm": 124,
+      "masks": [4369, 0, 17476, 32768, 4112, 0]
+    },
+    {
+      "blindId": "BLIND-12",
+      "taskId": "TASK-E-COUNTRY",
+      "task": "edit",
+      "prompt": "在当前 Country Pattern 的最后四步加入简化 Fill。只能修改 Kick、Snare 和 Rim 的第 13–16 步；前 12 步、其他轨道和 BPM 必须保持不变。",
+      "bpm": 120,
+      "masks": [33025, 4112, 21845, 0, 0, 32768]
+    }
+  ]
+}

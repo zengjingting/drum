@@ -1,7 +1,10 @@
 {
   "name": "easyinput-metronome-web-control",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "python3 -m http.server 8765 --directory main/web"
+    "dev": "python3 web_server.py",
+    "dev:mock": "python3 web_server.py --mock",
+    "test:web": "python3 -m unittest discover -s host_tests -p 'test_web_*.py' -v && node host_tests/web_ai_test.mjs"
   }
 }

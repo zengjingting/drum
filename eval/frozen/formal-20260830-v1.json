@@ -1,0 +1,60 @@
+{
+  "freezeId": "formal-20260830-v1",
+  "createdAt": "2026-08-30T06:57:05Z",
+  "experimentVersion": "easyinput-groove-eval.v1",
+  "sourceBaseline": {
+    "branch": "main",
+    "gitCommit": "f091e32de1feed12e26ac7be0f4edfc68d3309bb",
+    "webLastChangedCommit": "8515d07b1bd1f0819ec55579a9d2a8c2dd3c1e64",
+    "workingTreePolicy": "Uncommitted PCM, gain, documentation, and evaluation-harness changes are excluded from the firmware and web baseline. They remain untouched in the working tree."
+  },
+  "assetSnapshot": {
+    "source": "git objects at sourceBaseline.gitCommit",
+    "files": {
+      "main/assets/drums/s1_kick.pcm": "0af8b529636fc3e1185082a97dcb492d9d3475cb39ca9246e88534a025b2f1ec",
+      "main/assets/drums/s2_snare.pcm": "c4928e4fcaeb0cd3d040a90102a42be78738adc782f01665847de5b0e45341a0",
+      "main/assets/drums/s3_closed_hihat.pcm": "c0dc46c94e53773ee7b21ff03a86732a285add110a37f905d15c7ced7232830b",
+      "main/assets/drums/s4_open_hihat.pcm": "8deb049183fdeb281fc6bab4894ce188b53d0d48d55284aa476599d2881c2c8b",
+      "main/assets/drums/s5_clap.pcm": "c97cc58cbdb17af8a9399b0dd1bfb23516601de3cb9a0ff1304483ae8c3cddb1",
+      "main/assets/drums/s6_rimshot.pcm": "3164c9e72d4116803b2095183cd824e78df5d5de9dfd20f63efedb07f5843852",
+      "main/drum_samples.c": "9adbab312e684743e6a8f7191f8a41f11e4b0051b2f41d294f7b864d7fefef2c"
+    },
+    "canonicalManifestFormat": "lowercase SHA-256, two spaces, repository-relative path, LF; paths in displayed order",
+    "manifestSha256": "6ce669953a788076365e33a391b2d237f5efc67d0a89a3a836438a91d91589bb"
+  },
+  "harnessSnapshot": {
+    "scope": "All regular files under eval except eval/results, eval/frozen, and __pycache__, plus docs/ai-pattern-model-evaluation-plan.md; sorted repository-relative paths; lowercase SHA-256, two spaces, path, LF",
+    "fileCount": 22,
+    "manifestSha256": "4a30b07a358bd7305104061085e9cd2cc80b97568875cca7bdf5e093fce2d3b5"
+  },
+  "providers": [
+    {
+      "providerId": "ollama",
+      "requestedModel": "qwen3.5:2b",
+      "thinkingMode": "disabled"
+    },
+    {
+      "providerId": "zhipu",
+      "requestedModel": "glm-5.3-flash",
+      "thinkingMode": "enabled_low"
+    },
+    {
+      "providerId": "deepseek",
+      "requestedModel": "deepseek-v4-flash",
+      "documentedModelVersion": "DeepSeek-V4-Flash-0731",
+      "thinkingMode": "disabled"
+    }
+  ],
+  "generationSettings": {
+    "temperature": 0.6,
+    "topP": 0.9,
+    "maxOutputTokens": 1024,
+    "timeoutSeconds": 120
+  },
+  "formalRunPolicy": {
+    "scoredFirstResponses": 18,
+    "unscoredWarmups": 3,
+    "maximumRepairs": 18,
+    "hardwareCommandsAllowed": false
+  }
+}

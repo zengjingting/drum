@@ -1,0 +1,43 @@
+{
+  "experimentVersion": "easyinput-groove-eval.v1",
+  "freezeId": "formal-20260830-v1",
+  "observedAt": "2026-08-30T07:04:11Z",
+  "transport": "ESP32-S3 USB Serial/JTAG",
+  "protocolVersion": 2,
+  "requiredCapabilitiesObserved": [
+    "pattern",
+    "trigger",
+    "sequencer"
+  ],
+  "deviceFirmwareCommitVerified": false,
+  "deviceFirmwareCommitVerificationGap": "The current STATE response does not include a firmware commit or image digest. The intended source baseline is f091e32de1feed12e26ac7be0f4edfc68d3309bb, but this serial check cannot prove that exact binary is flashed.",
+  "stateBefore": {
+    "bpm": 120,
+    "running": false,
+    "pattern": [0, 0, 0, 0, 0, 0]
+  },
+  "results": [
+    {"runId": "formal-20260830-v1-zhipu-G-HOUSE", "patternAck": true},
+    {"runId": "formal-20260830-v1-zhipu-G-FUNK", "patternAck": true},
+    {"runId": "formal-20260830-v1-zhipu-G-COUNTRY", "patternAck": true},
+    {"runId": "formal-20260830-v1-zhipu-E-HOUSE", "patternAck": true},
+    {"runId": "formal-20260830-v1-zhipu-E-FUNK", "patternAck": true},
+    {"runId": "formal-20260830-v1-zhipu-E-COUNTRY", "patternAck": true},
+    {"runId": "formal-20260830-v1-deepseek-G-HOUSE", "patternAck": true},
+    {"runId": "formal-20260830-v1-deepseek-G-FUNK", "patternAck": true},
+    {"runId": "formal-20260830-v1-deepseek-G-COUNTRY", "patternAck": true},
+    {"runId": "formal-20260830-v1-deepseek-E-HOUSE", "patternAck": true},
+    {"runId": "formal-20260830-v1-deepseek-E-FUNK", "patternAck": true},
+    {"runId": "formal-20260830-v1-deepseek-E-COUNTRY", "patternAck": true}
+  ],
+  "summary": {
+    "eligiblePatterns": 12,
+    "acknowledgedPatterns": 12,
+    "ineligiblePatternsSent": 0
+  },
+  "stateAfter": {
+    "bpm": 120,
+    "running": false,
+    "pattern": [0, 0, 0, 0, 0, 0]
+  }
+}
