@@ -13,6 +13,7 @@ import {
   quantizePadEvents,
   serializeSavedPattern,
   validatePadEvent,
+  validateRecordBoundary,
   verifyRecording,
 } from './pad-recording.js';
 import {
@@ -354,7 +355,7 @@ function refreshControlAvailability() {
     : !recordingAvailable || locked || state.running;
   recordPattern.textContent = canStopRecording ? '停止录制' : '开始录制';
   recordPattern.classList.toggle('recording', canStopRecording);
-  savePatternButton.disabled = locked || !hasPattern() || !storageDirty;
+  savePatternButton.disabled = recordingLocksControls() || !hasPattern() || !storageDirty;
   explainPattern.disabled = explanationLoading || locked || !hasPattern() || Boolean(
     serialPort && !patternRevisions.isSynced,
   );
@@ -502,7 +503,11 @@ async function transmitPattern(snapshot) {
     throw error;
   }
   const message = await ack;
-  if (!patternRevisions.acknowledge(message)) {
+  if (!patternRevisions.acknowledge({
+    revision: Number(message.revision),
+    bpm: Number(message.bpm),
+    masks: message.pattern,
+  })) {
     throw new AiPatternError('protocol_stale', '硬件返回了旧版本或不一致的 COMMIT ACK。');
   }
 }

@@ -21,6 +21,7 @@ assert.match(appSource, /capabilities\.has\('revisionCommit'\)/);
 assert.match(appSource, /sendCommand\('CAPTURE READY 1'\)/);
 assert.match(appSource, /sendCommand\('RECORD START'/);
 assert.match(appSource, /sendCommand\('RECORD STOP'/);
+assert.match(appSource, /validateRecordBoundary,/);
 assert.match(appSource, /\/api\/debug\/recording-trace/);
 for (const stage of [
   'record_start_requested',
@@ -56,6 +57,16 @@ assert.ok(
   recordHandler.indexOf("recordingPhase === 'starting'")
     < recordHandler.indexOf('recordingBoundaryGate.resolve(message)'),
   'the started boundary must activate recording synchronously before buffered pad lines are handled',
+);
+assert.match(
+  appSource,
+  /masks: message\.pattern/,
+  'firmware COMMIT ACK pattern must be normalized to the revision store masks field',
+);
+assert.match(
+  appSource,
+  /savePatternButton\.disabled = recordingLocksControls\(\) \|\| !hasPattern\(\) \|\| !storageDirty/,
+  'local save must not remain blocked while a hardware Pattern commit is in flight',
 );
 
 const start = { phase: 'started', frame: 1000, lastEvent: 20, dropped: 0 };
