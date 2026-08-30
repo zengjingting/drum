@@ -17,5 +17,13 @@ cc -std=c11 -Wall -Wextra -Werror \
 
 ./host_tests/drum_mixer_test
 
+cc -std=c11 -Wall -Wextra -Werror \
+  -Imain \
+  main/encoder_decoder.c \
+  host_tests/test_encoder_decoder.c \
+  -o host_tests/encoder_decoder_test
+
+./host_tests/encoder_decoder_test
+
 python3 host_tests/validate_drum_assets.py
 python3 host_tests/validate_protocol_contract.py

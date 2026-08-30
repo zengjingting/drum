@@ -4,6 +4,7 @@
 
 #include "board_pins.h"
 #include "driver/gpio.h"
+#include "encoder_decoder.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -23,31 +24,18 @@ static uint8_t read_encoder_ab(void)
 static void input_task(void *arg)
 {
     (void)arg;
-    static const int8_t transition_table[16] = {
-         0, -1,  1,  0,
-         1,  0,  0, -1,
-        -1,  0,  0,  1,
-         0,  1, -1,  0,
-    };
-
-    uint8_t previous_ab = read_encoder_ab();
-    int transition_accumulator = 0;
+    encoder_decoder_t decoder;
+    encoder_decoder_init(&decoder, read_encoder_ab());
     bool raw_pressed = gpio_get_level(PIN_ENCODER_BUTTON) == 0;
     bool stable_pressed = raw_pressed;
     uint32_t stable_count = 0;
 
     while (true) {
         const uint8_t current_ab = read_encoder_ab();
-        const int8_t transition = transition_table[(previous_ab << 2) | current_ab];
-        previous_ab = current_ab;
-        transition_accumulator += transition;
-
-        if (transition_accumulator >= 4) {
-            metronome_app_adjust_bpm(ENCODER_DIRECTION * ENCODER_BPM_PER_DETENT);
-            transition_accumulator = 0;
-        } else if (transition_accumulator <= -4) {
-            metronome_app_adjust_bpm(-ENCODER_DIRECTION * ENCODER_BPM_PER_DETENT);
-            transition_accumulator = 0;
+        const int8_t detent = encoder_decoder_update(&decoder, current_ab);
+        if (detent != 0) {
+            metronome_app_adjust_bpm(detent * ENCODER_DIRECTION *
+                                     ENCODER_BPM_PER_DETENT);
         }
 
         const bool current_pressed = gpio_get_level(PIN_ENCODER_BUTTON) == 0;

@@ -4,6 +4,7 @@ idf_component_register(
         "board_power.c"
         "metronome_app.c"
         "input_controls.c"
+        "encoder_decoder.c"
         "drum_pads.c"
         "drum_mixer.c"
         "drum_samples.c"
