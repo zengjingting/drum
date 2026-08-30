@@ -126,11 +126,13 @@ P0 的产品决策、交互状态、失败边界与验收口径记录在 `docs/a
 
 操作顺序是：连接支持 `padEvents` 的固件 → 确认音序器处于停止状态 → 点击“开始录制” → 在实体 Pad 上演奏 → 点击“停止录制” → 结果一次性进入现有音序器 → 手动校正、保存、AI 解释或点击“开始”播放。
 
-首版把录制开始到停止的设备 frame 区间线性近似映射为 16 步；同一音轨落在同一格的事件会合并，不同音轨可以共享一格。当前 BPM 不会根据录制长度自动改变。该方案只提供可编辑的近似量化，不保留力度、Swing 或微小时序，也不包装成精准转录。
+量化以第一次实体 Pad 触发作为第 1 步时间原点，后续事件依据当前 BPM 和 48 kHz I2S frame 吸附到最近的 1/16 音符。点击“开始录制”和“停止录制”只负责划定事件采集范围，不参与节奏拉伸；超出首个单小节的事件不会被挤入第 16 步。同一音轨落在同一格的事件会合并，不同音轨可以共享一格。该方案仍不保留力度、Swing 或微小时序，也不包装成精准转录。
+
+真机排障期间，网页会把录制边界、原始 Pad 事件、逐事件量化落格、下发 Mask、ACK 和播放步写入本机 `.diagnostics/recording-trace.ndjson`。该目录不会进入 Git，诊断不记录自然语言、模型输出、密钥或音频，写入失败也不会影响硬件链路。
 
 AI 解释请求使用 `easyinput.pattern.explanation.v1`，解释证据引用的音轨与步数必须在当前 Pattern 中真实触发，否则后端最多定向修复一次，仍失败就拒绝展示。修改 Pattern 或 BPM 后，旧解释会标记为对应修改前版本。DeepSeek 或网络失败不影响录制结果、编辑、保存与硬件播放。
 
-本阶段的完整决策、开发顺序、协议合同、风险和验收清单记录在 `docs/pad-recording-ai-explanation-mvp-decisions.md`。
+已实现的历史 MVP、真机记录和固定 BPM量化证据保留在 `docs/pad-recording-ai-explanation-mvp-decisions.md`。后续开发以 `docs/pad-recording-auto-tempo-ai-explanation-product-spec.md` 为产品合同，覆盖 S8录制、编码器回放与调速、自动 Tempo候选、Pattern revision以及 AI解释最新版本。
 
 ## 本机确定性测试
 

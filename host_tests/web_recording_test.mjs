@@ -18,6 +18,23 @@ assert.match(indexHtml, /id="explainPattern"[^>]*>AI 解释<\/button>/);
 assert.match(appSource, /capabilities\.has\('padEvents'\)/);
 assert.match(appSource, /sendCommand\('RECORD START'/);
 assert.match(appSource, /sendCommand\('RECORD STOP'/);
+assert.match(appSource, /\/api\/debug\/recording-trace/);
+for (const stage of [
+  'record_start_requested',
+  'pad_received',
+  'pattern_quantized',
+  'pattern_sync_sent',
+  'pattern_ack_received',
+  'playback_toggle_requested',
+  'device_state',
+]) {
+  assert.match(appSource, new RegExp(stage), `recording trace must include ${stage}`);
+}
+assert.match(
+  appSource,
+  /quantizePadEvents\(\s*verified\.events,\s*desiredBpm,\s*\)/,
+  'page quantization must use the current BPM instead of start/stop click duration',
+);
 const padHandler = appSource.slice(
   appSource.indexOf("if (message.type === 'pad')"),
   appSource.indexOf("if (message.type === 'record')"),
@@ -25,27 +42,55 @@ const padHandler = appSource.slice(
 assert.doesNotMatch(padHandler, /setPattern|renderPattern/, 'recording must not update steps live');
 
 const start = { phase: 'started', frame: 1000, lastEvent: 20, dropped: 0 };
-const stop = { phase: 'stopped', frame: 2600, lastEvent: 24, dropped: 0 };
+const stop = { phase: 'stopped', frame: 169000, lastEvent: 24, dropped: 0 };
 const events = [
-  { type: 'pad', event: 21, track: 0, frame: 1000, source: 'hardware' },
-  { type: 'pad', event: 22, track: 1, frame: 1400, source: 'hardware' },
-  { type: 'pad', event: 23, track: 0, frame: 1800, source: 'hardware' },
-  { type: 'pad', event: 24, track: 1, frame: 2600, source: 'hardware' },
+  { type: 'pad', event: 21, track: 0, frame: 49000, source: 'hardware' },
+  { type: 'pad', event: 22, track: 1, frame: 73000, source: 'hardware' },
+  { type: 'pad', event: 23, track: 0, frame: 97000, source: 'hardware' },
+  { type: 'pad', event: 24, track: 1, frame: 121000, source: 'hardware' },
 ];
 
 const verified = verifyRecording(events, start, stop);
 assert.equal(verified.events.length, 4);
-const quantized = quantizePadEvents(verified.events, start.frame, stop.frame);
-assert.deepEqual(quantized.masks, [0x0101, 0x8010, 0, 0, 0, 0]);
+const quantized = quantizePadEvents(verified.events, 120);
+assert.deepEqual(quantized.masks, [0x0101, 0x1010, 0, 0, 0, 0]);
 assert.equal(quantized.acceptedCount, 4);
+assert.equal(quantized.anchorFrame, 49000, 'the first physical hit anchors step 1');
+assert.equal(quantized.ignoredCount, 0);
+assert.deepEqual(
+  quantized.assignments.map(({ track, step, accepted }) => ({ track, step, accepted })),
+  [
+    { track: 0, step: 1, accepted: true },
+    { track: 1, step: 5, accepted: true },
+    { track: 0, step: 9, accepted: true },
+    { track: 1, step: 13, accepted: true },
+  ],
+  'diagnostics must retain the exact event-to-step mapping',
+);
 
 const simultaneous = quantizePadEvents([
   { event: 1, track: 0, frame: 150, source: 'hardware' },
   { event: 2, track: 1, frame: 150, source: 'hardware' },
   { event: 3, track: 0, frame: 151, source: 'hardware' },
-], 100, 200);
-assert.equal(simultaneous.masks[0], 1 << 8, 'same-track hits in one step merge');
-assert.equal(simultaneous.masks[1], 1 << 8, 'different tracks may share a step');
+], 120);
+assert.equal(simultaneous.masks[0], 1, 'same-track hits in one step merge');
+assert.equal(simultaneous.masks[1], 1, 'different tracks may share a step');
+
+const oneBarOnly = quantizePadEvents([
+  { event: 1, track: 0, frame: 1000, source: 'hardware' },
+  { event: 2, track: 0, frame: 97000, source: 'hardware' },
+], 120);
+assert.equal(oneBarOnly.masks[0], 1, 'an event at the next bar must not collapse into step 16');
+assert.equal(oneBarOnly.acceptedCount, 1);
+assert.equal(oneBarOnly.ignoredCount, 1);
+
+const ninetyBpm = quantizePadEvents([
+  { event: 1, track: 0, frame: 1000, source: 'hardware' },
+  { event: 2, track: 0, frame: 33000, source: 'hardware' },
+  { event: 3, track: 0, frame: 65000, source: 'hardware' },
+  { event: 4, track: 0, frame: 97000, source: 'hardware' },
+], 90);
+assert.equal(ninetyBpm.masks[0], 0x1111, '90 BPM quarter notes map to steps 1, 5, 9, 13');
 
 assert.throws(
   () => verifyRecording(events.slice(0, 3), start, stop),
@@ -55,7 +100,8 @@ assert.throws(
   () => verifyRecording(events, start, { ...stop, dropped: 1 }),
   (error) => error.type === 'event_loss',
 );
-assert.deepEqual(quantizePadEvents([], 100, 200).masks, [0, 0, 0, 0, 0, 0]);
+assert.deepEqual(quantizePadEvents([], 120).masks, [0, 0, 0, 0, 0, 0]);
+assert.throws(() => quantizePadEvents(events, 20), (error) => error.type === 'quantization_error');
 
 const tracks = masksToTracks([0x8001, 0, 0, 0, 0, 0]);
 assert.equal(tracks[0][0], 1);

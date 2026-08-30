@@ -23,6 +23,7 @@ import {
 
 const REQUIRED_PROTOCOL_VERSION = 2;
 const COMMAND_TIMEOUT_MS = 3500;
+const RECORDING_TRACE_ENDPOINT = '/api/debug/recording-trace';
 const instruments = [
   { key: 'S1', name: 'Kick', color: '#ff7043' },
   { key: 'S2', name: 'Snare', color: '#ffb45b' },
@@ -104,9 +105,59 @@ let explanationLoading = false;
 let explanationPayload = null;
 let explanationSourceFingerprint = null;
 let patternApproximateQuantization = false;
+let recordingTraceSessionId = null;
+let recordingTraceSequence = 0;
+let lastTracedDeviceState = '';
 const stateWaiters = new Set();
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
+
+function createRecordingTraceSession() {
+  const randomPart = globalThis.crypto?.randomUUID?.()
+    || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  recordingTraceSessionId = `recording-${randomPart}`;
+  recordingTraceSequence = 0;
+  lastTracedDeviceState = '';
+}
+
+function traceRecording(stage, payload = {}) {
+  if (!recordingTraceSessionId) return;
+  const event = {
+    sessionId: recordingTraceSessionId,
+    sequence: recordingTraceSequence++,
+    stage,
+    clientTimeMs: Date.now(),
+    payload,
+  };
+  console.info('[EasyInput recording trace]', event);
+  void fetch(RECORDING_TRACE_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(event),
+    keepalive: true,
+  }).catch(() => {
+    // Diagnostics must never interrupt hardware recording or playback.
+  });
+}
+
+function traceDeviceState(message) {
+  if (!recordingTraceSessionId) return;
+  const payload = {
+    bpm: Number(message.bpm),
+    running: Boolean(message.running),
+    sequenceStep: Number(message.sequenceStep) + 1,
+    uiPosition: Number(message.uiPosition) + 1,
+    pattern: Array.isArray(message.pattern)
+      ? message.pattern.map((value) => Number(value) & 0xffff)
+      : null,
+    metronomeClickExpected: Boolean(message.running),
+    metronomeClickQuarterSteps: [1, 5, 9, 13],
+  };
+  const signature = JSON.stringify(payload);
+  if (signature === lastTracedDeviceState) return;
+  lastTracedDeviceState = signature;
+  traceRecording('device_state', payload);
+}
 
 function buildInterface() {
   instruments.forEach((instrument, index) => {
@@ -331,6 +382,9 @@ async function transmitPattern(masks) {
   }
   const ack = waitForPatternAck();
   try {
+    traceRecording('pattern_sync_sent', {
+      masks: masks.map((value) => Number(value) & 0xffff),
+    });
     await sendCommand(`PATTERN ${masks.join(' ')}`, true);
   } catch (error) {
     patternAckGate.reject(error);
@@ -434,6 +488,11 @@ async function startPadRecording() {
     setRecordingError(new PadRecordingError('busy', '请先停止音序器播放，再开始录制。'));
     return;
   }
+  createRecordingTraceSession();
+  traceRecording('record_start_requested', {
+    bpm: desiredBpm,
+    patternBefore: pattern.map((value) => Number(value) & 0xffff),
+  });
   recordingPhase = 'starting';
   recordedPadEvents = [];
   recordingStart = null;
@@ -444,10 +503,16 @@ async function startPadRecording() {
   try {
     await sendCommand('RECORD START', true);
     recordingStart = await boundary;
+    traceRecording('record_boundary_started', recordingStart);
     recordingPhase = 'recording';
     recordStatus.textContent = '正在录制 · 已记录 0 次敲击';
     refreshControlAvailability();
   } catch (error) {
+    traceRecording('recording_error', {
+      phase: 'start',
+      type: error?.type || 'unknown',
+      message: error?.message || '开始录制失败',
+    });
     recordingBoundaryGate.reject(error);
     try { await boundary; } catch (_) { /* consume rejected boundary */ }
     void sendCommand('RECORD STOP');
@@ -457,6 +522,9 @@ async function startPadRecording() {
 
 async function stopPadRecording() {
   if (recordingPhase !== 'recording') return;
+  traceRecording('record_stop_requested', {
+    eventCount: recordedPadEvents.length,
+  });
   recordingPhase = 'stopping';
   recordStatus.textContent = '正在停止录制并核对事件…';
   refreshControlAvailability();
@@ -464,14 +532,30 @@ async function stopPadRecording() {
   try {
     await sendCommand('RECORD STOP', true);
     const stop = await boundary;
+    traceRecording('record_boundary_stopped', stop);
     recordingPhase = 'quantizing';
     recordStatus.textContent = '已接收实体 Pad 事件，正在近似量化为 16 步…';
     const verified = verifyRecording(recordedPadEvents, recordingStart, stop);
+    traceRecording('recording_verified', {
+      start: verified.start,
+      stop: verified.stop,
+      events: verified.events,
+    });
     const result = quantizePadEvents(
       verified.events,
-      verified.start.frame,
-      verified.stop.frame,
+      desiredBpm,
     );
+    traceRecording('pattern_quantized', {
+      bpm: desiredBpm,
+      sampleRateHz: 48000,
+      anchorFrame: result.anchorFrame,
+      framesPerStep: result.framesPerStep,
+      assignments: result.assignments,
+      masks: result.masks,
+      acceptedCount: result.acceptedCount,
+      ignoredCount: result.ignoredCount,
+      tracks: instruments.map(({ key, name }) => ({ key, name })),
+    });
     if (result.acceptedCount === 0) {
       recordingPhase = 'idle';
       recordStatus.textContent = '本次没有收到有效敲击，已保留原 Pattern。';
@@ -481,13 +565,23 @@ async function stopPadRecording() {
     }
     setPattern(result.masks, true);
     patternApproximateQuantization = true;
-    sequenceSource.textContent = `实体演奏 · ${result.acceptedCount} 次敲击 · 近似量化为 16 步`;
+    const ignoredSuffix = result.ignoredCount > 0
+      ? ` · ${result.ignoredCount} 次超出首个小节未写入`
+      : '';
+    sequenceSource.textContent = `实体演奏 · 首击对齐第 1 步 · ${desiredBpm} BPM${ignoredSuffix}`;
     recordingPhase = 'draft';
-    recordStatus.textContent = `已记录 ${result.acceptedCount} 次敲击并近似量化；可点击音序格校正。`;
+    recordStatus.textContent = result.ignoredCount > 0
+      ? `已按首击和当前 BPM 写入 ${result.acceptedCount} 次敲击；${result.ignoredCount} 次超出首个小节。`
+      : `已按首击和当前 BPM 对齐 ${result.acceptedCount} 次敲击；可点击音序格校正。`;
     recordStatus.classList.remove('error');
     recordStatus.classList.add('success');
     refreshControlAvailability();
   } catch (error) {
+    traceRecording('recording_error', {
+      phase: 'stop',
+      type: error?.type || 'unknown',
+      message: error?.message || '停止录制失败',
+    });
     recordingBoundaryGate.reject(error);
     try { await boundary; } catch (_) { /* consume rejected boundary */ }
     setRecordingError(error);
@@ -655,9 +749,11 @@ function handleLine(line) {
         renderPattern();
       }
       render(message);
+      traceDeviceState(message);
       return;
     }
     if (message.type === 'ack' && message.command === 'PATTERN') {
+      traceRecording('pattern_ack_received', { command: 'PATTERN' });
       patternAckGate.acknowledge();
       return;
     }
@@ -667,10 +763,22 @@ function handleLine(line) {
         pulsePad(event.track);
         if (recordingPhase === 'recording' || recordingPhase === 'stopping') {
           recordedPadEvents.push(event);
+          traceRecording('pad_received', {
+            ...event,
+            key: instruments[event.track]?.key || null,
+            name: instruments[event.track]?.name || null,
+          });
           recordStatus.textContent = `正在录制 · 已记录 ${recordedPadEvents.length} 次敲击`;
         }
       } catch (error) {
-        if (recordingLocksControls()) setRecordingError(error);
+        if (recordingLocksControls()) {
+          traceRecording('recording_error', {
+            phase: 'pad',
+            type: error?.type || 'unknown',
+            message: error?.message || 'Pad 事件不合法',
+          });
+          setRecordingError(error);
+        }
       }
       return;
     }
@@ -837,6 +945,13 @@ async function togglePlayback() {
       return;
     }
   }
+  traceRecording('playback_toggle_requested', {
+    currentlyRunning: Boolean(state.running),
+    bpm: desiredBpm,
+    masks: pattern.map((value) => Number(value) & 0xffff),
+    metronomeClickExpectedAfterToggle: !state.running,
+    metronomeClickQuarterSteps: [1, 5, 9, 13],
+  });
   await sendCommand('TOGGLE');
 }
 

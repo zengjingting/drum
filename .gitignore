@@ -11,3 +11,4 @@ host_tests/encoder_decoder_test
 easyinput-board-cy/
 .env
 .env.*
+.diagnostics/

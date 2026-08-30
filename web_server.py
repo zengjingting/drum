@@ -8,11 +8,13 @@ import copy
 import json
 import os
 import re
+import threading
 import time
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from eval.easyinput_eval.cases import load_benchmark_document
 from eval.easyinput_eval.constants import MAX_BPM, MIN_BPM, STEPS_PER_BAR, TRACK_IDS
@@ -42,6 +44,25 @@ MAX_REQUEST_BYTES = 16 * 1024
 MODEL_ID = "deepseek-v4-flash"
 ENV_KEY_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 CJK_TEXT_PATTERN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
+RECORDING_TRACE_PATH = ROOT / ".diagnostics" / "recording-trace.ndjson"
+TRACE_SESSION_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+TRACE_SENSITIVE_KEY_PATTERN = re.compile(
+    r"(?:authorization|api.?key|prompt|secret|token|password)", re.IGNORECASE
+)
+TRACE_STAGES = {
+    "record_start_requested",
+    "record_boundary_started",
+    "pad_received",
+    "record_stop_requested",
+    "record_boundary_stopped",
+    "recording_verified",
+    "pattern_quantized",
+    "pattern_sync_sent",
+    "pattern_ack_received",
+    "playback_toggle_requested",
+    "device_state",
+    "recording_error",
+}
 
 
 def _load_local_environment(path: Path = LOCAL_ENV_PATH) -> None:
@@ -77,6 +98,130 @@ class PublicApiError(RuntimeError):
         self.error_type = error_type
         self.message = message
         self.status = status
+
+
+def _validate_trace_value(value: Any, *, depth: int = 0) -> Any:
+    if depth > 5:
+        raise PublicApiError(
+            "request_error", "诊断数据嵌套过深。", HTTPStatus.BAD_REQUEST
+        )
+    if value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if isinstance(value, float):
+        if not value == value or value in {float("inf"), float("-inf")}:
+            raise PublicApiError(
+                "request_error", "诊断数值不合法。", HTTPStatus.BAD_REQUEST
+            )
+        return value
+    if isinstance(value, str):
+        if len(value) > 256:
+            raise PublicApiError(
+                "request_error", "诊断文本过长。", HTTPStatus.BAD_REQUEST
+            )
+        return value
+    if isinstance(value, list):
+        if len(value) > 128:
+            raise PublicApiError(
+                "request_error", "诊断数组过长。", HTTPStatus.BAD_REQUEST
+            )
+        return [_validate_trace_value(item, depth=depth + 1) for item in value]
+    if isinstance(value, dict):
+        normalized: dict[str, Any] = {}
+        for key, item in value.items():
+            if not isinstance(key, str) or len(key) > 64:
+                raise PublicApiError(
+                    "request_error", "诊断字段名不合法。", HTTPStatus.BAD_REQUEST
+                )
+            if TRACE_SENSITIVE_KEY_PATTERN.search(key):
+                raise PublicApiError(
+                    "request_error", "诊断数据不能包含敏感字段。", HTTPStatus.BAD_REQUEST
+                )
+            normalized[key] = _validate_trace_value(item, depth=depth + 1)
+        return normalized
+    raise PublicApiError(
+        "request_error", "诊断数据类型不受支持。", HTTPStatus.BAD_REQUEST
+    )
+
+
+def _validate_trace_event(value: Any) -> dict[str, Any]:
+    required = {"sessionId", "sequence", "stage", "clientTimeMs", "payload"}
+    if not isinstance(value, dict) or set(value) != required:
+        raise PublicApiError(
+            "request_error", "诊断事件字段集合不匹配。", HTTPStatus.BAD_REQUEST
+        )
+    session_id = value.get("sessionId")
+    if not isinstance(session_id, str) or not TRACE_SESSION_PATTERN.fullmatch(session_id):
+        raise PublicApiError(
+            "request_error", "诊断会话编号不合法。", HTTPStatus.BAD_REQUEST
+        )
+    sequence = value.get("sequence")
+    client_time_ms = value.get("clientTimeMs")
+    if not isinstance(sequence, int) or isinstance(sequence, bool) or sequence < 0:
+        raise PublicApiError(
+            "request_error", "诊断序号不合法。", HTTPStatus.BAD_REQUEST
+        )
+    if (
+        not isinstance(client_time_ms, int)
+        or isinstance(client_time_ms, bool)
+        or client_time_ms < 0
+    ):
+        raise PublicApiError(
+            "request_error", "诊断客户端时间不合法。", HTTPStatus.BAD_REQUEST
+        )
+    stage = value.get("stage")
+    if stage not in TRACE_STAGES:
+        raise PublicApiError(
+            "request_error", "诊断阶段不受支持。", HTTPStatus.BAD_REQUEST
+        )
+    payload = value.get("payload")
+    if not isinstance(payload, dict):
+        raise PublicApiError(
+            "request_error", "诊断 payload 必须是对象。", HTTPStatus.BAD_REQUEST
+        )
+    return {
+        "sessionId": session_id,
+        "sequence": sequence,
+        "stage": stage,
+        "clientTimeMs": client_time_ms,
+        "payload": _validate_trace_value(payload),
+    }
+
+
+class RecordingTraceStore:
+    def __init__(self, path: Path = RECORDING_TRACE_PATH) -> None:
+        self.path = path
+        self._lock = threading.Lock()
+
+    def append(self, raw_event: Any) -> dict[str, Any]:
+        event = _validate_trace_event(raw_event)
+        stored = {"serverTimeMs": time.time_ns() // 1_000_000, **event}
+        encoded = json.dumps(stored, ensure_ascii=False, separators=(",", ":"))
+        with self._lock:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            with self.path.open("a", encoding="utf-8") as output:
+                output.write(encoded + "\n")
+        return stored
+
+    def read(self, session_id: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
+        if session_id is not None and not TRACE_SESSION_PATTERN.fullmatch(session_id):
+            raise PublicApiError(
+                "request_error", "诊断会话编号不合法。", HTTPStatus.BAD_REQUEST
+            )
+        if not self.path.is_file():
+            return []
+        with self._lock:
+            lines = self.path.read_text(encoding="utf-8").splitlines()
+        events: list[dict[str, Any]] = []
+        for line in lines:
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if session_id is None or event.get("sessionId") == session_id:
+                events.append(event)
+        return events[-max(1, min(limit, 500)):]
 
 
 def _generate_request(user_prompt: str) -> dict[str, Any]:
@@ -608,7 +753,13 @@ class MockDeepSeekAdapter(ProviderAdapter):
         )
 
 
-def make_handler(service: PatternService, web_root: Path = WEB_ROOT):
+def make_handler(
+    service: PatternService,
+    web_root: Path = WEB_ROOT,
+    trace_store: RecordingTraceStore | None = None,
+):
+    recording_traces = trace_store or RecordingTraceStore()
+
     class EasyInputHandler(SimpleHTTPRequestHandler):
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             super().__init__(*args, directory=str(web_root), **kwargs)
@@ -619,13 +770,32 @@ def make_handler(service: PatternService, web_root: Path = WEB_ROOT):
             super().end_headers()
 
         def do_GET(self) -> None:  # noqa: N802 - stdlib handler API
-            if self.path == "/api/health":
+            parsed = urlparse(self.path)
+            if parsed.path == "/api/health":
                 self._write_json(HTTPStatus.OK, service.health())
+                return
+            if parsed.path == "/api/debug/recording-trace":
+                query = parse_qs(parsed.query)
+                session_id = query.get("sessionId", [None])[0]
+                try:
+                    events = recording_traces.read(session_id=session_id)
+                except PublicApiError as exc:
+                    self._write_public_error(exc)
+                    return
+                self._write_json(
+                    HTTPStatus.OK,
+                    {"ok": True, "sessionId": session_id, "events": events},
+                )
                 return
             super().do_GET()
 
         def do_POST(self) -> None:  # noqa: N802 - stdlib handler API
-            if self.path not in {"/api/pattern/generate", "/api/pattern/explain"}:
+            parsed = urlparse(self.path)
+            if parsed.path not in {
+                "/api/pattern/generate",
+                "/api/pattern/explain",
+                "/api/debug/recording-trace",
+            }:
                 self._write_json(
                     HTTPStatus.NOT_FOUND,
                     {"ok": False, "error": {"type": "not_found", "message": "接口不存在。"}},
@@ -652,7 +822,14 @@ def make_handler(service: PatternService, web_root: Path = WEB_ROOT):
                 )
                 return
             try:
-                if self.path == "/api/pattern/generate":
+                if parsed.path == "/api/debug/recording-trace":
+                    event = recording_traces.append(body)
+                    result = {
+                        "ok": True,
+                        "sessionId": event["sessionId"],
+                        "sequence": event["sequence"],
+                    }
+                elif parsed.path == "/api/pattern/generate":
                     if not isinstance(body, dict) or set(body) != {"prompt"}:
                         raise PublicApiError(
                             "request_error",
@@ -660,7 +837,7 @@ def make_handler(service: PatternService, web_root: Path = WEB_ROOT):
                             HTTPStatus.BAD_REQUEST,
                         )
                     result = service.generate(body.get("prompt", ""))
-                else:
+                elif parsed.path == "/api/pattern/explain":
                     if not isinstance(body, dict) or set(body) != {"pattern"}:
                         raise PublicApiError(
                             "request_error",
@@ -718,7 +895,10 @@ def main() -> int:
     _load_local_environment()
     adapter: ProviderAdapter | None = MockDeepSeekAdapter() if args.mock else None
     service = PatternService(adapter=adapter, mock_mode=args.mock)
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(service))
+    trace_store = RecordingTraceStore()
+    server = ThreadingHTTPServer(
+        (args.host, args.port), make_handler(service, trace_store=trace_store)
+    )
     mode = "mock" if args.mock else "DeepSeek"
     configured = "yes" if service.health()["configured"] else "no"
     print(

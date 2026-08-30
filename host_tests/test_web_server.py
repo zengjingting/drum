@@ -19,7 +19,13 @@ from eval.easyinput_eval.providers import (
     ProviderError,
     ProviderResponse,
 )
-from web_server import MODEL_ID, PatternService, _load_local_environment, make_handler
+from web_server import (
+    MODEL_ID,
+    PatternService,
+    RecordingTraceStore,
+    _load_local_environment,
+    make_handler,
+)
 
 
 def valid_pattern() -> dict[str, Any]:
@@ -118,8 +124,15 @@ class SequenceAdapter(ProviderAdapter):
 
 
 class ApiServer:
-    def __init__(self, service: PatternService) -> None:
-        self.server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(service))
+    def __init__(
+        self,
+        service: PatternService,
+        trace_store: RecordingTraceStore | None = None,
+    ) -> None:
+        self.server = ThreadingHTTPServer(
+            ("127.0.0.1", 0),
+            make_handler(service, trace_store=trace_store),
+        )
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
 
     def __enter__(self) -> "ApiServer":
@@ -192,6 +205,49 @@ class LocalEnvironmentTests(unittest.TestCase):
 
 
 class PatternServiceApiTests(unittest.TestCase):
+    def test_recording_trace_round_trip_and_sensitive_field_rejection(self) -> None:
+        adapter = SequenceAdapter([json.dumps(valid_pattern())])
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "recording-trace.ndjson"
+            trace_store = RecordingTraceStore(path)
+            with ApiServer(PatternService(adapter=adapter), trace_store) as api:
+                event = {
+                    "sessionId": "recording-test",
+                    "sequence": 0,
+                    "stage": "pad_received",
+                    "clientTimeMs": 123456,
+                    "payload": {
+                        "event": 7,
+                        "track": 2,
+                        "frame": 48000,
+                        "source": "hardware",
+                    },
+                }
+                post_status, post_payload = api.request(
+                    "/api/debug/recording-trace", event
+                )
+                get_status, get_payload = api.request(
+                    "/api/debug/recording-trace?sessionId=recording-test"
+                )
+                bad_status, bad_payload = api.request(
+                    "/api/debug/recording-trace",
+                    {
+                        **event,
+                        "sequence": 1,
+                        "payload": {"apiKey": "must-not-be-stored"},
+                    },
+                )
+
+            self.assertEqual(post_status, 200)
+            self.assertTrue(post_payload["ok"])
+            self.assertEqual(get_status, 200)
+            self.assertEqual(len(get_payload["events"]), 1)
+            self.assertEqual(get_payload["events"][0]["stage"], "pad_received")
+            self.assertEqual(get_payload["events"][0]["payload"]["track"], 2)
+            self.assertEqual(bad_status, 400)
+            self.assertEqual(bad_payload["error"]["type"], "request_error")
+            self.assertNotIn("must-not-be-stored", path.read_text(encoding="utf-8"))
+
     def test_valid_first_response_returns_pattern_and_firmware_masks(self) -> None:
         adapter = SequenceAdapter([json.dumps(valid_pattern())])
         with ApiServer(PatternService(adapter=adapter)) as api:

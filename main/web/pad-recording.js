@@ -1,4 +1,5 @@
 export const RECORDING_STORAGE_KEY = 'easyinput.current-pattern.v1';
+export const RECORDING_SAMPLE_RATE_HZ = 48000;
 
 export class PadRecordingError extends Error {
   constructor(type, message) {
@@ -150,24 +151,69 @@ export function verifyRecording(events, startBoundary, stopBoundary) {
   return { events: accepted, start, stop };
 }
 
-export function quantizePadEvents(events, startFrame, stopFrame) {
-  if (!isSafeNonNegativeInteger(startFrame) || !isSafeNonNegativeInteger(stopFrame)) {
-    throw new PadRecordingError('quantization_error', '录制边界缺少有效设备时钟。');
+export function quantizePadEvents(events, bpm, sampleRateHz = RECORDING_SAMPLE_RATE_HZ) {
+  if (!Number.isFinite(bpm) || bpm < 40 || bpm > 240) {
+    throw new PadRecordingError('quantization_error', '量化 BPM 必须是 40–240。');
   }
-  if (stopFrame <= startFrame) {
-    throw new PadRecordingError('quantization_error', '录制时长必须大于零。');
+  if (!Number.isFinite(sampleRateHz) || sampleRateHz <= 0) {
+    throw new PadRecordingError('quantization_error', '量化采样率必须大于零。');
   }
+  if (!Array.isArray(events)) {
+    throw new PadRecordingError('quantization_error', '录制事件必须是数组。');
+  }
+
+  const validatedEvents = events.map(validatePadEvent);
   const masks = [0, 0, 0, 0, 0, 0];
+  if (validatedEvents.length === 0) {
+    return {
+      masks,
+      acceptedCount: 0,
+      ignoredCount: 0,
+      anchorFrame: null,
+      framesPerStep: sampleRateHz * 60 / bpm / 4,
+      assignments: [],
+    };
+  }
+
+  const anchorFrame = Math.min(...validatedEvents.map((event) => event.frame));
+  const framesPerStep = sampleRateHz * 60 / bpm / 4;
   let acceptedCount = 0;
-  for (const rawEvent of events) {
-    const event = validatePadEvent(rawEvent);
-    if (event.frame < startFrame || event.frame > stopFrame) continue;
-    const progress = (event.frame - startFrame) / (stopFrame - startFrame);
-    const step = Math.max(0, Math.min(15, Math.round(progress * 15)));
+  let ignoredCount = 0;
+  const assignments = [];
+  for (const event of validatedEvents) {
+    const relativeStep = (event.frame - anchorFrame) / framesPerStep;
+    if (relativeStep < 0 || relativeStep >= 16) {
+      ignoredCount += 1;
+      assignments.push({
+        event: event.event,
+        track: event.track,
+        frame: event.frame,
+        relativeStep,
+        step: null,
+        accepted: false,
+      });
+      continue;
+    }
+    const step = Math.min(15, Math.round(relativeStep));
     masks[event.track] |= 1 << step;
     acceptedCount += 1;
+    assignments.push({
+      event: event.event,
+      track: event.track,
+      frame: event.frame,
+      relativeStep,
+      step: step + 1,
+      accepted: true,
+    });
   }
-  return { masks: masks.map((mask) => mask & 0xffff), acceptedCount };
+  return {
+    masks: masks.map((mask) => mask & 0xffff),
+    acceptedCount,
+    ignoredCount,
+    anchorFrame,
+    framesPerStep,
+    assignments,
+  };
 }
 
 export function masksToTracks(masks) {
