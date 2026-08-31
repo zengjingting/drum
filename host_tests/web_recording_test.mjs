@@ -24,7 +24,8 @@ assert.ok(
   indexHtml.indexOf('id="padGrid"') < indexHtml.indexOf('class="workspace"'),
   'Hardware Pad Monitor must live in the top hardware bar',
 );
-assert.match(indexHtml, /class="ai-actions"[\s\S]*id="generatePattern"[\s\S]*id="applyAiPattern"[\s\S]*id="explainPattern"/);
+assert.match(indexHtml, /class="ai-actions"[\s\S]*id="generatePattern"[\s\S]*id="explainPattern"/);
+assert.match(indexHtml, /id="aiResult"[^>]*hidden[\s\S]*id="applyAiPattern"/);
 assert.match(appSource, /capabilities\.has\('padEvents'\)/);
 assert.match(appSource, /capabilities\.has\('hardwareCaptureButton'\)/);
 assert.match(appSource, /capabilities\.has\('revisionCommit'\)/);

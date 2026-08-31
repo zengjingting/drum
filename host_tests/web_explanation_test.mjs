@@ -23,6 +23,17 @@ assert.match(appSource, /Pattern 和硬件播放不受影响/);
 assert.doesNotMatch(appSource, /AI 解释完成 · Pattern v/);
 assert.doesNotMatch(indexHtml, /风格小课堂|让鼓点更好听，可以试试/);
 assert.match(indexHtml, /id="explanationStyle">Boom Bap/);
+assert.match(appSource, /function clearPatternExplanation\(\)/);
+assert.match(
+  appSource,
+  /if \(snapshot\.phase === 'generating'\) \{\s*clearPatternExplanation\(\);/,
+  'starting a valid AI generation must remove the previous or sample explanation',
+);
+assert.match(
+  appSource,
+  /function clearPatternExplanation\(\)[\s\S]*?explanationPayload = null;[\s\S]*?explanationResult\.hidden = true;/,
+  'clearing the explanation must reset its state and hide the rendered result',
+);
 
 const masks = [0x1111, 0x1010, 0x5555, 0, 0, 0];
 const pattern = buildExplanationPattern(masks, 120, true);

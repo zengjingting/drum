@@ -29,7 +29,27 @@ const indexHtml = readFileSync(new URL('../main/web/index.html', import.meta.url
 const appSource = readFileSync(new URL('../main/web/app.js', import.meta.url), 'utf8');
 assert.doesNotMatch(indexHtml, /id="aiPreviewGrid"/, 'AI must not render a second sequencer');
 assert.doesNotMatch(indexHtml, /id="demoPattern"/, 'AI input replaces the fixed demo pattern');
-assert.match(indexHtml, /id="applyAiPattern"[^>]*>应用<\/button>/);
+assert.match(indexHtml, /id="applyAiPattern"[^>]*>应用到音序器<\/button>/);
+assert.match(
+  indexHtml,
+  /id="aiResult"[^>]*hidden[\s\S]*id="applyAiPattern"/,
+  'Apply must only appear inside the generated candidate module',
+);
+const aiActionsStart = indexHtml.indexOf('<div class="ai-actions">');
+const aiActionsMarkup = indexHtml.slice(
+  aiActionsStart,
+  indexHtml.indexOf('</div>', aiActionsStart) + '</div>'.length,
+);
+assert.doesNotMatch(
+  aiActionsMarkup,
+  /id="applyAiPattern"/,
+  'Apply must not remain beside the prompt controls',
+);
+assert.match(
+  appSource,
+  /if \(snapshot\.phase === 'generating'\) \{[\s\S]*?aiResult\.hidden = true;/,
+  'A new generation must hide the previous candidate until the next candidate is ready',
+);
 const applyCandidateSource = appSource.slice(
   appSource.indexOf('async function applyCandidate('),
   appSource.indexOf('async function togglePlayback('),

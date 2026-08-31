@@ -947,6 +947,16 @@ function renderExplanation(payload) {
   );
 }
 
+function clearPatternExplanation() {
+  stopExplanationLoadingStatus();
+  explanationPayload = null;
+  explanationSourceRevision = null;
+  explanationStatus.textContent = '';
+  explanationStatus.classList.remove('error', 'success', 'loading');
+  explanationResult.hidden = true;
+  explanationStale.hidden = true;
+}
+
 function stopExplanationLoadingStatus() {
   if (explanationLoadingTimer !== null) {
     window.clearInterval(explanationLoadingTimer);
@@ -1361,6 +1371,8 @@ function renderAiState(snapshot) {
   generatePattern.disabled = snapshot.phase === 'generating' || snapshot.phase === 'applying';
   aiStatus.classList.remove('error', 'success');
   if (snapshot.phase === 'generating') {
+    clearPatternExplanation();
+    aiResult.hidden = true;
     aiStatus.textContent = '正在调用 DeepSeek 并校验六轨 16 步结构…';
   } else if (snapshot.phase === 'ready' || snapshot.phase === 'applied' || snapshot.phase === 'apply_error') {
     const candidate = snapshot.candidate;

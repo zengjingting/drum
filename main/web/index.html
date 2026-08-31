@@ -78,7 +78,7 @@
       min-width: 0;
       min-height: 0;
       display: grid;
-      grid-template-columns: 150px 190px minmax(470px, 1fr) 138px;
+      grid-template-columns: 182px 190px minmax(360px, 1fr) 170px;
       align-items: stretch;
       overflow: hidden;
       border: 1px solid var(--line-strong);
@@ -98,6 +98,7 @@
     .hardware-cell:last-child { border-right: 0; }
     .transport-control { flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; }
     .hardware-bar .connection { min-height: 0; justify-content: center; border: 0; border-radius: 0; background: #0b0f11; }
+    .hardware-bar .connection span:last-child { white-space: nowrap; }
 
     .brand { display: flex; align-items: center; align-self: stretch; gap: 11px; min-width: 0; }
     .brand > div { display: grid; align-content: center; gap: 3px; }
@@ -338,7 +339,7 @@
     .pads-head h2 { margin: 0; color: #aeb6b5; font: 700 8px/1 ui-monospace, monospace; letter-spacing: .16em; text-transform: uppercase; }
     .pads-meta { display: flex; align-items: center; gap: 12px; }
     .pads-sync { color: var(--cool); font: 700 8px/1 ui-monospace, monospace; }
-    .pad-grid { display: grid; grid-template-columns: repeat(6, minmax(58px, 1fr)); gap: 6px; }
+    .pad-grid { display: grid; grid-template-columns: repeat(6, minmax(48px, 88px)); justify-content: center; gap: 5px; }
     .pad-card {
       --pad: var(--cool);
       min-width: 0;
@@ -346,7 +347,7 @@
       display: grid;
       align-content: center;
       gap: 4px;
-      padding: 6px 7px;
+      padding: 6px;
       overflow: hidden;
       border: 1px solid #2c3739;
       border-radius: 5px;
@@ -406,7 +407,7 @@
       line-height: 1.55;
     }
     .ai-compose textarea::placeholder { color: #596466; }
-    .ai-actions { display: grid; grid-template-columns: repeat(3, auto); gap: 6px; }
+    .ai-actions { display: grid; grid-template-columns: repeat(2, auto); gap: 6px; }
     .ai-action {
       min-height: 36px;
       padding: 0 12px;
@@ -432,7 +433,7 @@
     .ai-status.loading::before { content: ""; width: 12px; height: 12px; flex: 0 0 auto; border: 2px solid rgba(113,224,212,.25); border-top-color: var(--cool); border-radius: 50%; animation: spin 700ms linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .ai-result { margin-top: 8px; padding: 8px 0 0; border-top: 1px solid var(--line); }
-    .ai-result-head { display: grid; gap: 9px; }
+    .ai-result-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 9px; }
     .ai-result-title { margin: 0; font-size: 13px; }
     .ai-result-meta, .ai-note { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
     .ai-result .ai-action { justify-self: start; min-width: 74px; }
@@ -462,7 +463,7 @@
     @media (max-width: 1080px) {
       body { overflow: auto; }
       main { width: min(920px, calc(100% - 28px)); height: auto; min-height: 100dvh; grid-template-rows: auto auto auto; }
-      .hardware-bar { grid-template-columns: 150px minmax(200px, 1fr) 138px; min-height: 174px; }
+      .hardware-bar { grid-template-columns: 182px minmax(200px, 1fr) 170px; min-height: 174px; }
       .hardware-bar .pads { grid-column: 1 / -1; grid-row: 2; border-top: 1px solid var(--line); }
       .workspace { grid-template-columns: 1fr; }
       .instrument-panel { min-height: 610px; }
@@ -474,15 +475,15 @@
     @media (max-width: 680px) {
       main { width: calc(100% - 18px); padding: 9px 0 28px; gap: 9px; }
       .topbar { gap: 10px; }
-      .hardware-bar { grid-template-columns: 130px 1fr; }
+      .hardware-bar { grid-template-columns: 170px 1fr; }
       .hardware-bar .connection { grid-column: 1 / -1; min-height: 44px; }
       .connection { padding: 0 10px; }
-      .connection span:last-child { max-width: 82px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .connection span:last-child { white-space: nowrap; }
       .workspace { gap: 9px; }
       .instrument-panel { min-height: 590px; padding: 14px 10px 12px; }
       .section-heading { align-items: flex-start; }
       .sequence-grid { min-width: 650px; }
-      .pad-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .pad-grid { grid-template-columns: repeat(3, minmax(0, 88px)); }
       .pads-head { align-items: flex-start; flex-direction: column; gap: 4px; }
       .sequence-footer { flex-direction: column; gap: 5px; }
     }
@@ -556,13 +557,15 @@
             <textarea id="aiPrompt" maxlength="500" placeholder="例如：给我一个 92 BPM、松弛一点的 Boom Bap，底鼓不要太密，第二和第四拍有军鼓。"></textarea>
             <div class="ai-actions">
               <button class="ai-action" id="generatePattern" type="button">生成鼓点</button>
-              <button class="ai-action secondary" id="applyAiPattern" type="button" disabled>应用</button>
               <button class="ai-action secondary" id="explainPattern" type="button" disabled>AI 解释</button>
             </div>
           </div>
           <p class="ai-status" id="aiStatus" aria-live="polite"></p>
           <div class="ai-result" id="aiResult" hidden>
-            <div class="ai-result-head"><div><h3 class="ai-result-title" id="aiPatternTitle"></h3><p class="ai-result-meta" id="aiPatternMeta"></p><p class="ai-note" id="aiPatternNote"></p></div></div>
+            <div class="ai-result-head">
+              <div><h3 class="ai-result-title" id="aiPatternTitle"></h3><p class="ai-result-meta" id="aiPatternMeta"></p><p class="ai-note" id="aiPatternNote"></p></div>
+              <button class="ai-action secondary" id="applyAiPattern" type="button" disabled>应用到音序器</button>
+            </div>
           </div>
         </section>
 
