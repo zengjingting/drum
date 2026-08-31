@@ -62,6 +62,10 @@ TRACE_STAGES = {
     "playback_toggle_requested",
     "device_state",
     "recording_error",
+    "record_button_state",
+    "pattern_save_requested",
+    "pattern_save_completed",
+    "pattern_save_failed",
 }
 
 

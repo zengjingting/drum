@@ -124,6 +124,7 @@ let patternApproximateQuantization = false;
 let recordingTraceSessionId = null;
 let recordingTraceSequence = 0;
 let lastTracedDeviceState = '';
+let lastTracedRecordControlState = '';
 const stateWaiters = new Set();
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -135,6 +136,11 @@ function createRecordingTraceSession() {
   recordingTraceSessionId = `recording-${randomPart}`;
   recordingTraceSequence = 0;
   lastTracedDeviceState = '';
+  lastTracedRecordControlState = '';
+}
+
+function ensureRecordingTraceSession() {
+  if (!recordingTraceSessionId) createRecordingTraceSession();
 }
 
 function traceRecording(stage, payload = {}) {
@@ -176,6 +182,44 @@ function traceDeviceState(message) {
   if (signature === lastTracedDeviceState) return;
   lastTracedDeviceState = signature;
   traceRecording('device_state', payload);
+}
+
+function recordControlSnapshot() {
+  const canStopRecording = recordingPhase === 'recording';
+  const blockers = [];
+  if (!canStopRecording) {
+    if (!recordingAvailable) blockers.push('recording_unavailable');
+    if (patternInFlight) blockers.push('pattern_sync_in_flight');
+    if (aiController?.phase === 'applying') blockers.push('ai_pattern_applying');
+    if (recordingLocksControls()) blockers.push(`recording_phase_${recordingPhase}`);
+    if (state.running) blockers.push('playback_running');
+  }
+  return {
+    disabled: canStopRecording ? false : blockers.length > 0,
+    action: canStopRecording ? 'stop' : 'start',
+    blockers,
+    connected: Boolean(serialPort && writer),
+    recordingAvailable,
+    recordingPhase,
+    stateRunning: Boolean(state.running),
+    patternInFlight,
+    patternQueued,
+    patternDirty,
+    storageDirty,
+    hasPattern: hasPattern(),
+    currentRevision: patternRevisions.currentRevision,
+    synced: patternRevisions.isSynced,
+    aiPhase: aiController?.phase || 'unavailable',
+  };
+}
+
+function traceRecordControlState(trigger = 'refresh') {
+  const payload = recordControlSnapshot();
+  const signature = JSON.stringify(payload);
+  if (signature === lastTracedRecordControlState) return;
+  ensureRecordingTraceSession();
+  lastTracedRecordControlState = signature;
+  traceRecording('record_button_state', { trigger, ...payload });
 }
 
 function waitForCaptureReadyAck(timeoutMs = COMMAND_TIMEOUT_MS) {
@@ -425,6 +469,10 @@ function refreshControlAvailability() {
     : !recordingAvailable || locked || state.running;
   recordPattern.textContent = canStopRecording ? '停止录制' : '开始录制';
   recordPattern.classList.toggle('recording', canStopRecording);
+  traceRecordControlState('control_refresh');
+  recordPattern.title = recordPattern.disabled
+    ? `暂不可用：${recordControlSnapshot().blockers.join(', ')}`
+    : '';
   savePatternButton.disabled = recordingLocksControls() || !hasPattern() || !storageDirty;
   explainPattern.disabled = explanationLoading || locked || !hasPattern() || Boolean(
     serialPort && !patternRevisions.isSynced,
@@ -706,7 +754,7 @@ async function startPadRecording() {
     setRecordingError(new PadRecordingError('busy', '请先停止音序器播放，再开始录制。'));
     return;
   }
-  createRecordingTraceSession();
+  ensureRecordingTraceSession();
   traceRecording('record_start_requested', {
     bpm: selectedBpm,
     patternBefore: pattern.map((value) => Number(value) & 0xffff),
@@ -861,6 +909,8 @@ async function selectTempoCandidate(bpm) {
 }
 
 function saveCurrentPattern() {
+  ensureRecordingTraceSession();
+  traceRecording('pattern_save_requested', recordControlSnapshot());
   try {
     const serialized = serializeSavedPattern({
       name: patternName.value,
@@ -874,9 +924,14 @@ function saveCurrentPattern() {
     saveStatus.classList.remove('error');
     saveStatus.classList.add('success');
     if (recordingPhase === 'draft' || recordingPhase === 'error') recordingPhase = 'saved';
+    traceRecording('pattern_save_completed', recordControlSnapshot());
   } catch (error) {
     saveStatus.textContent = `保存失败：${error.message}`;
     saveStatus.classList.add('error');
+    traceRecording('pattern_save_failed', {
+      ...recordControlSnapshot(),
+      message: error?.message || '保存失败',
+    });
   }
   refreshControlAvailability();
 }
@@ -1117,7 +1172,7 @@ function handleLine(line) {
         }
         if (recordingBoundaryGate.resolve(message)) return;
         if (boundary.phase === 'started' && boundary.origin === 's8') {
-          createRecordingTraceSession();
+          ensureRecordingTraceSession();
           traceRecording('record_start_requested', { origin: 's8' });
           traceRecording('record_boundary_started', boundary);
           activateRecording(boundary);

@@ -36,11 +36,24 @@ for (const stage of [
   'device_state',
   'capture_ready_requested',
   'capture_ready_ack_received',
+  'record_button_state',
+  'pattern_save_requested',
+  'pattern_save_completed',
 ]) {
   assert.match(appSource, new RegExp(stage), `recording trace must include ${stage}`);
 }
 for (const field of ['captureState', 'captureReady', 'patternRevision']) {
   assert.match(appSource, new RegExp(field), `device trace must include ${field}`);
+}
+for (const field of [
+  'blockers',
+  'storageDirty',
+  'patternInFlight',
+  'stateRunning',
+  'recordingPhase',
+  'currentRevision',
+]) {
+  assert.match(appSource, new RegExp(field), `record button trace must include ${field}`);
 }
 assert.match(
   appSource,

@@ -248,6 +248,39 @@ class PatternServiceApiTests(unittest.TestCase):
             self.assertEqual(bad_payload["error"]["type"], "request_error")
             self.assertNotIn("must-not-be-stored", path.read_text(encoding="utf-8"))
 
+    def test_recording_trace_accepts_record_button_and_save_diagnostics(self) -> None:
+        adapter = SequenceAdapter([json.dumps(valid_pattern())])
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "recording-trace.ndjson"
+            trace_store = RecordingTraceStore(path)
+            with ApiServer(PatternService(adapter=adapter), trace_store) as api:
+                stages = (
+                    "record_button_state",
+                    "pattern_save_requested",
+                    "pattern_save_completed",
+                    "pattern_save_failed",
+                )
+                statuses = []
+                for sequence, stage in enumerate(stages):
+                    status, _ = api.request(
+                        "/api/debug/recording-trace",
+                        {
+                            "sessionId": "recording-control-test",
+                            "sequence": sequence,
+                            "stage": stage,
+                            "clientTimeMs": 123456 + sequence,
+                            "payload": {
+                                "disabled": stage == "record_button_state",
+                                "blockers": ["pattern_sync_in_flight"],
+                                "storageDirty": True,
+                            },
+                        },
+                    )
+                    statuses.append(status)
+
+            self.assertEqual(statuses, [200, 200, 200, 200])
+            self.assertEqual(len(trace_store.read(session_id="recording-control-test")), 4)
+
     def test_valid_first_response_returns_pattern_and_firmware_masks(self) -> None:
         adapter = SequenceAdapter([json.dumps(valid_pattern())])
         with ApiServer(PatternService(adapter=adapter)) as api:
