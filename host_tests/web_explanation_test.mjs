@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   PatternExplanationError,
   buildExplanationPattern,
@@ -7,17 +8,30 @@ import {
   validateExplanation,
 } from '../main/web/pattern-explanation.js';
 
+const indexHtml = readFileSync(new URL('../main/web/index.html', import.meta.url), 'utf8');
+assert.match(indexHtml, /id="explanationStyle"/);
+assert.match(indexHtml, /id="explanationReasons"/);
+assert.match(indexHtml, /id="explanationLessonContent"/);
+assert.match(indexHtml, /id="explanationSuggestions"/);
+assert.doesNotMatch(indexHtml, /explanationLimitations|置信度/);
+
 const masks = [0x1111, 0x1010, 0x5555, 0, 0, 0];
 const pattern = buildExplanationPattern(masks, 120, true);
 const explanation = {
-  schemaVersion: 'easyinput.pattern.explanation.v1',
-  summary: '这个 Pattern 更接近基础 Rock。',
-  styleCandidates: [{ style: 'Rock', confidence: 'high' }],
-  evidence: [
+  schemaVersion: 'easyinput.pattern.explanation.v2',
+  closestStyle: 'Rock',
+  reasons: [
     { track: 'snare', steps: [5, 13], reason: '军鼓形成第二、第四拍反拍。' },
   ],
-  suggestion: '移动一个底鼓落点，比较切分感。',
-  limitations: '只依据单小节鼓点，不能判断完整歌曲流派。',
+  styleLesson: {
+    title: 'Rock 鼓点通常怎么编排？',
+    content: 'Rock 常用底鼓支撑强拍，军鼓强调第二和第四拍，并用踩镲维持稳定细分。',
+  },
+  improvementSuggestions: [{
+    suggestion: '移动一个底鼓落点，比较切分感。',
+    expectedEffect: '节奏会产生更明显的推动感。',
+    learningPoint: '练习比较强拍和非强拍底鼓的听感。',
+  }],
 };
 
 assert.deepEqual(validateExplanation(explanation, pattern), []);
@@ -30,8 +44,22 @@ assert.throws(
 );
 
 const badEvidence = structuredClone(explanation);
-badEvidence.evidence[0].steps = [2];
+badEvidence.reasons[0].steps = [2];
 assert.match(validateExplanation(badEvidence, pattern).join(' '), /未触发/);
+
+const oldExplanation = {
+  schemaVersion: 'easyinput.pattern.explanation.v1',
+  summary: '这个 Pattern 更接近基础 Rock。',
+  styleCandidates: [{ style: 'Rock', confidence: 'high' }],
+  evidence: [],
+  suggestion: '移动一个底鼓落点。',
+  limitations: '只依据单小节 Pattern。',
+};
+assert.match(validateExplanation(oldExplanation, pattern).join(' '), /字段集合|版本/);
+
+const englishLesson = structuredClone(explanation);
+englishLesson.styleLesson.content = 'Kick and snare form the groove.';
+assert.match(validateExplanation(englishLesson, pattern).join(' '), /小课堂/);
 
 const payload = {
   ok: true,
@@ -48,7 +76,7 @@ const result = await requestPatternExplanation(
   120,
   true,
 );
-assert.equal(result.explanation.styleCandidates[0].style, 'Rock');
+assert.equal(result.explanation.closestStyle, 'Rock');
 
 await assert.rejects(
   requestPatternExplanation(

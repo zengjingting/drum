@@ -38,7 +38,7 @@ from eval.easyinput_eval.validation import (
 
 ROOT = Path(__file__).resolve().parent
 WEB_ROOT = ROOT / "main" / "web"
-EXPLANATION_SCHEMA_PATH = ROOT / "schemas" / "pattern-explanation.schema.json"
+EXPLANATION_SCHEMA_PATH = ROOT / "schemas" / "pattern-explanation-v2.schema.json"
 LOCAL_ENV_PATH = ROOT / ".env.local"
 MAX_REQUEST_BYTES = 16 * 1024
 MODEL_ID = "deepseek-v4-flash"
@@ -349,12 +349,23 @@ def _build_explanation_messages(
     schema: dict[str, Any],
 ) -> list[dict[str, str]]:
     system = (
-        "你是 EasyInput 实体鼓机的节奏解释助手。只依据提供的六轨单小节 16 步 Pattern "
-        "和确定性特征判断节奏风格倾向。不得声称读取了音频，不得判断完整歌曲流派。"
-        "证据必须引用输入中实际为 1 的音轨和 1-based 步数。置信度只能是 high、medium、low。"
-        "summary、evidence.reason、suggestion、limitations 必须使用简体中文；"
-        "style 可以保留 Rock、Hip-Hop 等通用风格名称。"
-        "只输出符合给定 JSON Schema 的 JSON 对象，不要 Markdown。\nSchema:\n"
+        "你是 EasyInput 面向鼓点编排初学者的智能学习助手。\n\n"
+        "你的目标不是给出权威的音乐流派分类，而是帮助用户在自由创作中理解鼓点风格和基础编排方法。\n\n"
+        "请只依据提供的六轨、单小节、16 步 Pattern 和确定性节奏特征完成以下任务：\n"
+        "1. 判断当前节奏最接近的一种鼓点风格。closestStyle 只填写风格名称；"
+        "在原因中使用‘更接近’‘具有……倾向’等措辞，不得把单小节判断表述为完整歌曲的确定流派。\n"
+        "2. 使用用户当前 Pattern 中真实触发的音轨和 1-based 步数，解释为什么接近该风格。\n"
+        "3. 用鼓点初学者能够理解的 2 至 4 句简体中文，科普该风格常见的鼓组分工、典型落点和律动特点。\n"
+        "4. 给出 1 至 2 条当前六轨 16 步音序器能够实现的改进建议，并解释预期听感和对应的学习目标。\n\n"
+        "必须严格区分：\n"
+        "- reasons 描述用户当前 Pattern 实际具备的特征；\n"
+        "- styleLesson 描述该风格通常具备的编排特征，不得暗示当前 Pattern 已经包含全部典型特征；\n"
+        "- improvementSuggestions 描述用户接下来可以尝试的修改，不得写成当前 Pattern 已经存在的内容。\n\n"
+        "不得声称读取了音频，不得判断完整歌曲流派。"
+        "不得建议当前产品不支持的力度、Swing、微时序、多小节或新增音色。"
+        "reasons 引用的音轨和步数必须在输入 Pattern 中实际为 1。"
+        "除 Hip-Hop、Rock 等通用英文风格名称外，所有用户可见内容必须使用简体中文。"
+        "只输出符合给定 JSON Schema 的 JSON 对象，不要输出 Markdown 或额外说明。\nSchema:\n"
         + json.dumps(schema, ensure_ascii=False, separators=(",", ":"))
     )
     user = json.dumps(
@@ -375,52 +386,39 @@ def _validate_explanation(
     errors: list[dict[str, str]] = []
     if not isinstance(value, dict):
         return None, [{"path": "$", "message": "解释必须是 JSON 对象。"}]
-    allowed = {
-        "schemaVersion", "summary", "styleCandidates", "evidence", "suggestion", "limitations"
+    required = {
+        "schemaVersion",
+        "closestStyle",
+        "reasons",
+        "styleLesson",
+        "improvementSuggestions",
     }
-    required = set(allowed)
     if set(value) != required:
         errors.append({"path": "$", "message": "解释字段集合不匹配。"})
-    if value.get("schemaVersion") != "easyinput.pattern.explanation.v1":
+    if value.get("schemaVersion") != "easyinput.pattern.explanation.v2":
         errors.append({"path": "$.schemaVersion", "message": "Schema 版本不匹配。"})
-    for field, limit in (("summary", 300), ("suggestion", 300), ("limitations", 300)):
-        text = value.get(field)
-        if not isinstance(text, str) or not text.strip() or len(text) > limit:
-            errors.append({"path": f"$.{field}", "message": f"{field} 文本不合法。"})
-        elif not CJK_TEXT_PATTERN.search(text):
-            errors.append({
-                "path": f"$.{field}",
-                "message": f"{field} 必须使用简体中文。",
-            })
-    candidates = value.get("styleCandidates")
-    if not isinstance(candidates, list) or not 1 <= len(candidates) <= 3:
-        errors.append({"path": "$.styleCandidates", "message": "风格候选必须为 1–3 个。"})
+    closest_style = value.get("closestStyle")
+    if (
+        not isinstance(closest_style, str)
+        or not closest_style.strip()
+        or len(closest_style) > 40
+    ):
+        errors.append({"path": "$.closestStyle", "message": "最接近风格不合法。"})
+
+    reasons = value.get("reasons")
+    if not isinstance(reasons, list) or not 1 <= len(reasons) <= 6:
+        errors.append({"path": "$.reasons", "message": "判断原因必须为 1–6 条。"})
     else:
-        for index, candidate in enumerate(candidates):
-            if not isinstance(candidate, dict) or set(candidate) != {"style", "confidence"}:
-                errors.append({"path": f"$.styleCandidates[{index}]", "message": "候选字段不合法。"})
-                continue
-            if (
-                not isinstance(candidate["style"], str)
-                or not candidate["style"].strip()
-                or len(candidate["style"]) > 40
-                or candidate["confidence"] not in {"high", "medium", "low"}
-            ):
-                errors.append({"path": f"$.styleCandidates[{index}]", "message": "候选内容不合法。"})
-    evidence = value.get("evidence")
-    if not isinstance(evidence, list) or not 1 <= len(evidence) <= 6:
-        errors.append({"path": "$.evidence", "message": "判断依据必须为 1–6 条。"})
-    else:
-        for index, item in enumerate(evidence):
-            path = f"$.evidence[{index}]"
+        for index, item in enumerate(reasons):
+            path = f"$.reasons[{index}]"
             if not isinstance(item, dict) or set(item) != {"track", "steps", "reason"}:
-                errors.append({"path": path, "message": "依据字段不合法。"})
+                errors.append({"path": path, "message": "判断原因字段不合法。"})
                 continue
             track = item.get("track")
             steps = item.get("steps")
             reason = item.get("reason")
             if track not in TRACK_IDS:
-                errors.append({"path": f"{path}.track", "message": "依据音轨不合法。"})
+                errors.append({"path": f"{path}.track", "message": "判断原因音轨不合法。"})
                 continue
             if (
                 not isinstance(steps, list)
@@ -428,7 +426,7 @@ def _validate_explanation(
                 or len(steps) != len(set(steps))
                 or any(type(step) is not int or not 1 <= step <= 16 for step in steps)
             ):
-                errors.append({"path": f"{path}.steps", "message": "依据步数不合法。"})
+                errors.append({"path": f"{path}.steps", "message": "判断原因步数不合法。"})
             else:
                 inactive = [step for step in steps if pattern["tracks"][track][step - 1] != 1]
                 if inactive:
@@ -437,12 +435,45 @@ def _validate_explanation(
                         "message": f"引用了未触发步数 {inactive}。",
                     })
             if not isinstance(reason, str) or not reason.strip() or len(reason) > 240:
-                errors.append({"path": f"{path}.reason", "message": "依据说明不合法。"})
+                errors.append({"path": f"{path}.reason", "message": "判断原因说明不合法。"})
             elif not CJK_TEXT_PATTERN.search(reason):
                 errors.append({
                     "path": f"{path}.reason",
-                    "message": "依据说明必须使用简体中文。",
+                    "message": "判断原因说明必须使用简体中文。",
                 })
+
+    lesson = value.get("styleLesson")
+    if not isinstance(lesson, dict) or set(lesson) != {"title", "content"}:
+        errors.append({"path": "$.styleLesson", "message": "风格小课堂字段不合法。"})
+    else:
+        for field, limit in (("title", 80), ("content", 400)):
+            text = lesson.get(field)
+            path = f"$.styleLesson.{field}"
+            if not isinstance(text, str) or not text.strip() or len(text) > limit:
+                errors.append({"path": path, "message": "风格小课堂文本不合法。"})
+            elif not CJK_TEXT_PATTERN.search(text):
+                errors.append({"path": path, "message": "风格小课堂必须使用简体中文。"})
+
+    suggestions = value.get("improvementSuggestions")
+    if not isinstance(suggestions, list) or not 1 <= len(suggestions) <= 2:
+        errors.append({
+            "path": "$.improvementSuggestions",
+            "message": "改进建议必须为 1–2 条。",
+        })
+    else:
+        suggestion_fields = {"suggestion", "expectedEffect", "learningPoint"}
+        for index, item in enumerate(suggestions):
+            path = f"$.improvementSuggestions[{index}]"
+            if not isinstance(item, dict) or set(item) != suggestion_fields:
+                errors.append({"path": path, "message": "改进建议字段不合法。"})
+                continue
+            for field in suggestion_fields:
+                text = item.get(field)
+                field_path = f"{path}.{field}"
+                if not isinstance(text, str) or not text.strip() or len(text) > 240:
+                    errors.append({"path": field_path, "message": "改进建议文本不合法。"})
+                elif not CJK_TEXT_PATTERN.search(text):
+                    errors.append({"path": field_path, "message": "改进建议必须使用简体中文。"})
     return value, errors
 
 
@@ -690,7 +721,7 @@ class MockDeepSeekAdapter(ProviderAdapter):
     ) -> ProviderResponse:
         del output_schema, settings
         is_explanation = any(
-            "easyinput.pattern.explanation.v1" in message.get("content", "")
+            "easyinput.pattern.explanation.v2" in message.get("content", "")
             for message in messages
         )
         pattern = {
@@ -732,18 +763,26 @@ class MockDeepSeekAdapter(ProviderAdapter):
                     evidence_steps = active[:4]
                     break
         explanation = {
-            "schemaVersion": "easyinput.pattern.explanation.v1",
-            "summary": "这个单小节鼓点呈现出稳定、直接的基础律动。",
-            "styleCandidates": [{"style": "Rock", "confidence": "medium"}],
-            "evidence": [
+            "schemaVersion": "easyinput.pattern.explanation.v2",
+            "closestStyle": "Rock",
+            "reasons": [
                 {
                     "track": evidence_track,
                     "steps": evidence_steps,
                     "reason": "这些实际触发位置构成了当前 Pattern 的主要节奏骨架。",
                 }
             ],
-            "suggestion": "可以移动一个底鼓落点，比较修改前后的切分感。",
-            "limitations": "判断只依据单小节六轨 Pattern，不代表完整歌曲流派。",
+            "styleLesson": {
+                "title": "Rock 鼓点通常怎么编排？",
+                "content": "Rock 鼓点通常用底鼓支撑强拍、军鼓强调第二和第四拍，并用踩镲维持稳定细分。不同的底鼓落点会让律动呈现更直接或更有推动感。",
+            },
+            "improvementSuggestions": [
+                {
+                    "suggestion": "尝试移动一个底鼓落点，再比较修改前后的律动。",
+                    "expectedEffect": "错开强拍的底鼓可能让节奏更有推动感。",
+                    "learningPoint": "练习分辨直拍和切分落点带来的听感差异。",
+                }
+            ],
         }
         return ProviderResponse(
             raw_output=json.dumps(

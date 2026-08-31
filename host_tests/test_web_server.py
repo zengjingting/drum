@@ -20,6 +20,7 @@ from eval.easyinput_eval.providers import (
     ProviderResponse,
 )
 from web_server import (
+    EXPLANATION_SCHEMA_PATH,
     MODEL_ID,
     PatternService,
     RecordingTraceStore,
@@ -57,13 +58,9 @@ def explanation_request() -> dict[str, Any]:
 
 def valid_explanation() -> dict[str, Any]:
     return {
-        "schemaVersion": "easyinput.pattern.explanation.v1",
-        "summary": "这个 Pattern 更接近基础 Rock 律动。",
-        "styleCandidates": [
-            {"style": "Rock", "confidence": "high"},
-            {"style": "Pop", "confidence": "medium"},
-        ],
-        "evidence": [
+        "schemaVersion": "easyinput.pattern.explanation.v2",
+        "closestStyle": "Rock",
+        "reasons": [
             {
                 "track": "snare",
                 "steps": [5, 13],
@@ -75,8 +72,17 @@ def valid_explanation() -> dict[str, Any]:
                 "reason": "闭镲保持稳定八分音符骨架。",
             },
         ],
-        "suggestion": "可以移动一个底鼓落点来增加切分感。",
-        "limitations": "只依据单小节鼓点，不能判断完整歌曲流派。",
+        "styleLesson": {
+            "title": "Rock 鼓点通常怎么编排？",
+            "content": "Rock 常用底鼓支撑强拍，军鼓强调第二和第四拍，踩镲负责稳定细分。改变底鼓落点可以调节律动的推动感。",
+        },
+        "improvementSuggestions": [
+            {
+                "suggestion": "可以移动一个底鼓落点来增加切分感。",
+                "expectedEffect": "节奏会减少完全直拍的感觉，产生更明显的推动感。",
+                "learningPoint": "练习比较强拍与非强拍底鼓的听感差异。",
+            }
+        ],
     }
 
 
@@ -98,6 +104,8 @@ class SequenceAdapter(ProviderAdapter):
         self.is_available = available
         self.provider_error = provider_error
         self.calls = 0
+        self.last_messages: list[dict[str, str]] = []
+        self.last_schema: dict[str, Any] = {}
 
     def availability(self) -> Availability:
         return Availability(self.is_available)
@@ -109,8 +117,10 @@ class SequenceAdapter(ProviderAdapter):
         output_schema: dict[str, Any],
         settings: GenerationSettings,
     ) -> ProviderResponse:
-        del messages, output_schema, settings
+        del settings
         self.calls += 1
+        self.last_messages = messages
+        self.last_schema = output_schema
         if self.provider_error:
             raise ProviderError(self.provider_error)
         raw_output = self.outputs.pop(0)
@@ -205,6 +215,20 @@ class LocalEnvironmentTests(unittest.TestCase):
 
 
 class PatternServiceApiTests(unittest.TestCase):
+    def test_explanation_v2_schema_documents_every_property(self) -> None:
+        schema = json.loads(EXPLANATION_SCHEMA_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(schema["$id"], "easyinput.pattern.explanation.v2")
+
+        def assert_property_descriptions(node: Any, path: str = "$") -> None:
+            if not isinstance(node, dict):
+                return
+            for field, child in node.get("properties", {}).items():
+                self.assertIn("description", child, f"{path}.{field} 缺少字段说明")
+                assert_property_descriptions(child, f"{path}.{field}")
+            assert_property_descriptions(node.get("items"), f"{path}[]")
+
+        assert_property_descriptions(schema)
+
     def test_recording_trace_round_trip_and_sensitive_field_rejection(self) -> None:
         adapter = SequenceAdapter([json.dumps(valid_pattern())])
         with tempfile.TemporaryDirectory() as directory:
@@ -361,14 +385,18 @@ class PatternServiceApiTests(unittest.TestCase):
             )
         self.assertEqual(status, 200)
         self.assertTrue(payload["ok"])
-        self.assertEqual(payload["explanation"]["styleCandidates"][0]["style"], "Rock")
+        self.assertEqual(payload["explanation"]["closestStyle"], "Rock")
         self.assertEqual(payload["features"]["snareBackbeatSteps"], [5, 13])
         self.assertTrue(payload["firstPass"]["valid"])
         self.assertEqual(adapter.calls, 1)
+        self.assertEqual(adapter.last_schema["$id"], "easyinput.pattern.explanation.v2")
+        system_prompt = adapter.last_messages[0]["content"]
+        self.assertIn("鼓点编排初学者的智能学习助手", system_prompt)
+        self.assertIn("不得声称读取了音频", system_prompt)
 
     def test_explain_repairs_evidence_that_cites_inactive_step(self) -> None:
         invalid = valid_explanation()
-        invalid["evidence"][0]["steps"] = [2]
+        invalid["reasons"][0]["steps"] = [2]
         adapter = SequenceAdapter(
             [json.dumps(invalid), json.dumps(valid_explanation())]
         )
@@ -383,10 +411,12 @@ class PatternServiceApiTests(unittest.TestCase):
 
     def test_explain_repairs_english_user_visible_copy(self) -> None:
         english = json.loads(json.dumps(valid_explanation()))
-        english["summary"] = "This is a basic rock groove."
-        english["evidence"][0]["reason"] = "The snare lands on the backbeat."
-        english["suggestion"] = "Move one kick to add syncopation."
-        english["limitations"] = "One bar is not enough to identify a full song."
+        english["reasons"][0]["reason"] = "The snare lands on the backbeat."
+        english["styleLesson"]["title"] = "How is a rock groove arranged?"
+        english["styleLesson"]["content"] = "Kick and snare form the groove."
+        english["improvementSuggestions"][0]["suggestion"] = "Move one kick."
+        english["improvementSuggestions"][0]["expectedEffect"] = "More syncopation."
+        english["improvementSuggestions"][0]["learningPoint"] = "Learn syncopation."
         adapter = SequenceAdapter(
             [json.dumps(english), json.dumps(valid_explanation())]
         )
@@ -398,7 +428,29 @@ class PatternServiceApiTests(unittest.TestCase):
         self.assertFalse(payload["firstPass"]["valid"])
         self.assertTrue(payload["repairAttempted"])
         self.assertEqual(adapter.calls, 2)
-        self.assertIn("这个", payload["explanation"]["summary"])
+        self.assertIn("怎么编排", payload["explanation"]["styleLesson"]["title"])
+
+    def test_explain_rejects_v1_contract_and_repairs_to_v2(self) -> None:
+        old_contract = {
+            "schemaVersion": "easyinput.pattern.explanation.v1",
+            "summary": "这个 Pattern 更接近基础 Rock。",
+            "styleCandidates": [{"style": "Rock", "confidence": "high"}],
+            "evidence": [],
+            "suggestion": "移动一个底鼓落点。",
+            "limitations": "只依据单小节 Pattern。",
+        }
+        adapter = SequenceAdapter(
+            [json.dumps(old_contract), json.dumps(valid_explanation())]
+        )
+        with ApiServer(PatternService(adapter=adapter)) as api:
+            status, payload = api.request(
+                "/api/pattern/explain", {"pattern": explanation_request()}
+            )
+        self.assertEqual(status, 200)
+        self.assertFalse(payload["firstPass"]["valid"])
+        self.assertTrue(payload["repairAttempted"])
+        self.assertEqual(payload["explanation"]["schemaVersion"], "easyinput.pattern.explanation.v2")
+        self.assertEqual(adapter.calls, 2)
 
     def test_explain_rejects_empty_or_malformed_pattern(self) -> None:
         adapter = SequenceAdapter([json.dumps(valid_explanation())])

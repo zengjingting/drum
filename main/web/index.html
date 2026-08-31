@@ -426,9 +426,16 @@
     .record-status-row .ai-status:last-child { text-align: right; }
 
     .explanation-result { margin-top: 10px; padding: 11px; border: 1px solid #2f3b3d; border-radius: 6px; background: #0a0e10; }
-    .style-chips { display: flex; gap: 5px; flex-wrap: wrap; margin: 8px 0; }
-    .style-chip { padding: 4px 6px; border: 1px solid #3a4c4e; border-radius: 3px; color: var(--cool); font-size: 8px; }
-    .evidence-list { margin: 9px 0; padding-left: 17px; color: #bcc5c4; font-size: 9px; line-height: 1.55; }
+    .explanation-label { margin: 0 0 4px; color: #748182; font-size: 8px; letter-spacing: .12em; text-transform: uppercase; }
+    .explanation-style { margin: 0; color: var(--cool); font-family: "IBM Plex Mono", monospace; font-size: 18px; line-height: 1.2; }
+    .explanation-block { margin-top: 11px; padding-top: 10px; border-top: 1px solid #252e30; }
+    .explanation-block h4 { margin: 0 0 6px; color: #e2e7e5; font-size: 10px; font-weight: 600; }
+    .explanation-block p { margin: 0; color: #aab4b3; font-size: 9px; line-height: 1.6; }
+    .evidence-list { margin: 0; padding-left: 17px; color: #bcc5c4; font-size: 9px; line-height: 1.55; }
+    .suggestion-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+    .suggestion-list li { display: grid; gap: 3px; padding: 8px; border-left: 2px solid var(--accent); background: #101517; }
+    .suggestion-list strong { color: #dfe5e3; font-size: 9px; font-weight: 600; line-height: 1.45; }
+    .suggestion-list span { color: #8f9a99; font-size: 8px; line-height: 1.45; }
     .explanation-stale { margin: 8px 0 0; color: var(--accent); font-size: 9px; }
 
     @media (max-width: 1080px) {
@@ -529,11 +536,21 @@
           </div>
           <div class="record-status-row"><p class="ai-status" id="recordStatus" aria-live="polite">连接支持录制的固件后开始。</p><p class="ai-status" id="saveStatus" aria-live="polite">尚未保存</p></div>
           <div class="explanation-result" id="explanationResult" hidden>
-            <h3 class="ai-result-title" id="explanationSummary"></h3>
-            <div class="style-chips" id="explanationStyles"></div>
-            <ol class="evidence-list" id="explanationEvidence"></ol>
-            <p class="ai-note" id="explanationSuggestion"></p>
-            <p class="ai-note" id="explanationLimitations"></p>
+            <p class="explanation-label">最接近的风格</p>
+            <h3 class="explanation-style" id="explanationStyle"></h3>
+            <section class="explanation-block" aria-labelledby="explanationReasonsTitle">
+              <h4 id="explanationReasonsTitle">为什么这样判断</h4>
+              <ol class="evidence-list" id="explanationReasons"></ol>
+            </section>
+            <section class="explanation-block" aria-labelledby="explanationLessonTitle">
+              <p class="explanation-label">风格小课堂</p>
+              <h4 id="explanationLessonTitle"></h4>
+              <p id="explanationLessonContent"></p>
+            </section>
+            <section class="explanation-block" aria-labelledby="explanationSuggestionsTitle">
+              <h4 id="explanationSuggestionsTitle">让鼓点更好听，可以试试</h4>
+              <ul class="suggestion-list" id="explanationSuggestions"></ul>
+            </section>
             <p class="explanation-stale" id="explanationStale" hidden>当前 Pattern 已修改，这份解释对应修改前版本。</p>
           </div>
         </section>

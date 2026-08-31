@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "easyinput.pattern.explanation.v2",
+  "title": "EasyInput Beginner Pattern Explanation",
+  "description": "面向鼓点编排初学者的单小节 Pattern 风格解释、风格科普和练习建议。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "closestStyle",
+    "reasons",
+    "styleLesson",
+    "improvementSuggestions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "description": "解释输出合同版本，用于阻止旧版响应被新版网页误用。",
+      "const": "easyinput.pattern.explanation.v2"
+    },
+    "closestStyle": {
+      "description": "当前单小节鼓点最接近的一种风格名称，不代表完整歌曲的确定流派。",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "reasons": {
+      "description": "基于当前 Pattern 真实触发位置给出的风格判断原因。",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["track", "steps", "reason"],
+        "properties": {
+          "track": {
+            "description": "该判断依据所引用的板载音轨。",
+            "enum": ["kick", "snare", "closed_hat", "open_hat", "clap", "rim"]
+          },
+          "steps": {
+            "description": "该音轨中支撑判断的 1-based 真实触发步数。",
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 16,
+            "uniqueItems": true,
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16
+            }
+          },
+          "reason": {
+            "description": "说明这些真实触发位置为何让节奏接近目标风格。",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          }
+        }
+      }
+    },
+    "styleLesson": {
+      "description": "面向初学者的本次风格知识卡片，介绍典型编排特征。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "content"],
+      "properties": {
+        "title": {
+          "description": "风格科普卡片标题。",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "content": {
+          "description": "该风格常见的鼓组分工、典型落点和律动特征，不描述为当前 Pattern 已有事实。",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400
+        }
+      }
+    },
+    "improvementSuggestions": {
+      "description": "用户可在当前六轨 16 步音序器中实践的改进建议。",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["suggestion", "expectedEffect", "learningPoint"],
+        "properties": {
+          "suggestion": {
+            "description": "用户可以在当前 Pattern 上尝试的具体修改。",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "expectedEffect": {
+            "description": "执行该修改后可能产生的听感变化。",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "learningPoint": {
+            "description": "用户通过本次修改可以理解或练习的鼓点编排知识。",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          }
+        }
+      }
+    }
+  }
+}

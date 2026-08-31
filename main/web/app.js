@@ -66,11 +66,11 @@ const explainPattern = $('#explainPattern');
 const recordStatus = $('#recordStatus');
 const saveStatus = $('#saveStatus');
 const explanationResult = $('#explanationResult');
-const explanationSummary = $('#explanationSummary');
-const explanationStyles = $('#explanationStyles');
-const explanationEvidence = $('#explanationEvidence');
-const explanationSuggestion = $('#explanationSuggestion');
-const explanationLimitations = $('#explanationLimitations');
+const explanationStyle = $('#explanationStyle');
+const explanationReasons = $('#explanationReasons');
+const explanationLessonTitle = $('#explanationLessonTitle');
+const explanationLessonContent = $('#explanationLessonContent');
+const explanationSuggestions = $('#explanationSuggestions');
 const explanationStale = $('#explanationStale');
 
 let state = {
@@ -964,25 +964,29 @@ function restoreSavedPattern() {
 function renderExplanation(payload) {
   const explanation = payload.explanation;
   explanationResult.hidden = false;
-  explanationSummary.textContent = explanation.summary;
-  explanationStyles.replaceChildren();
-  const confidenceLabels = { high: '高', medium: '中', low: '低' };
-  explanation.styleCandidates.forEach((candidate) => {
-    const chip = document.createElement('span');
-    chip.className = 'style-chip';
-    chip.textContent = `${candidate.style} · ${confidenceLabels[candidate.confidence]}置信度`;
-    explanationStyles.append(chip);
-  });
-  explanationEvidence.replaceChildren();
-  explanation.evidence.forEach((item) => {
+  explanationStyle.textContent = explanation.closestStyle;
+  explanationReasons.replaceChildren();
+  explanation.reasons.forEach((item) => {
     const row = document.createElement('li');
     const trackIndex = TRACK_IDS.indexOf(item.track);
     const label = instruments[trackIndex]?.name || item.track;
     row.textContent = `${label} 第 ${item.steps.join('、')} 步：${item.reason}`;
-    explanationEvidence.append(row);
+    explanationReasons.append(row);
   });
-  explanationSuggestion.textContent = `修改建议：${explanation.suggestion}`;
-  explanationLimitations.textContent = `判断边界：${explanation.limitations}`;
+  explanationLessonTitle.textContent = explanation.styleLesson.title;
+  explanationLessonContent.textContent = explanation.styleLesson.content;
+  explanationSuggestions.replaceChildren();
+  explanation.improvementSuggestions.forEach((item) => {
+    const card = document.createElement('li');
+    const title = document.createElement('strong');
+    title.textContent = item.suggestion;
+    const effect = document.createElement('span');
+    effect.textContent = `听感：${item.expectedEffect}`;
+    const lesson = document.createElement('span');
+    lesson.textContent = `练习：${item.learningPoint}`;
+    card.append(title, effect, lesson);
+    explanationSuggestions.append(card);
+  });
   explanationStale.hidden = (
     explanationSourceRevision === patternRevisions.currentRevision
   );
