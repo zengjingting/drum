@@ -12,7 +12,7 @@ import {
 
 const indexHtml = readFileSync(new URL('../main/web/index.html', import.meta.url), 'utf8');
 const appSource = readFileSync(new URL('../main/web/app.js', import.meta.url), 'utf8');
-assert.match(indexHtml, /id="recordPattern"[^>]*>开始录制<\/button>/);
+assert.match(indexHtml, /id="recordPattern"[^>]*aria-label="开始录制"/);
 assert.match(indexHtml, /id="savePattern"[^>]*>保存<\/button>/);
 assert.match(indexHtml, /id="explainPattern"[^>]*>AI 解释<\/button>/);
 assert.doesNotMatch(indexHtml, /id="tempoCandidates"|id="patternName"|DEEPSEEK V4 · READY/);
@@ -20,6 +20,11 @@ assert.doesNotMatch(indexHtml, /S3 暂停使用|秒<\/strong> \/ 小节|01 \/ PA
 assert.match(indexHtml, /id="patternVersion"[^>]*>Pattern v0/);
 assert.match(indexHtml, /id="toggle"[^>]*aria-label="开始播放"/);
 assert.equal((indexHtml.match(/class="beat" aria-label="第 [1-4] 拍"/g) || []).length, 4);
+assert.ok(
+  indexHtml.indexOf('id="padGrid"') < indexHtml.indexOf('class="workspace"'),
+  'Hardware Pad Monitor must live in the top hardware bar',
+);
+assert.match(indexHtml, /class="ai-actions"[\s\S]*id="generatePattern"[\s\S]*id="applyAiPattern"[\s\S]*id="explainPattern"/);
 assert.match(appSource, /capabilities\.has\('padEvents'\)/);
 assert.match(appSource, /capabilities\.has\('hardwareCaptureButton'\)/);
 assert.match(appSource, /capabilities\.has\('revisionCommit'\)/);

@@ -16,10 +16,13 @@ assert.match(indexHtml, /id="explanationReasons"/);
 assert.match(indexHtml, /id="explanationLessonContent"/);
 assert.match(indexHtml, /id="explanationSuggestions"/);
 assert.doesNotMatch(indexHtml, /explanationLimitations|置信度/);
-assert.match(appSource, /AI 正在分析你的鼓点… 已等待/);
+assert.match(appSource, /AI正在分析你的鼓点/);
+assert.doesNotMatch(appSource, /AI 正在分析你的鼓点… 已等待/);
 assert.match(appSource, /AI 解释完成，用时/);
 assert.match(appSource, /Pattern 和硬件播放不受影响/);
 assert.doesNotMatch(appSource, /AI 解释完成 · Pattern v/);
+assert.doesNotMatch(indexHtml, /风格小课堂|让鼓点更好听，可以试试/);
+assert.match(indexHtml, /id="explanationStyle">Boom Bap/);
 
 const masks = [0x1111, 0x1010, 0x5555, 0, 0, 0];
 const pattern = buildExplanationPattern(masks, 120, true);

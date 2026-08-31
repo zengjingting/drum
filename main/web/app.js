@@ -64,6 +64,7 @@ const savePatternButton = $('#savePattern');
 const explainPattern = $('#explainPattern');
 const recordStatus = $('#recordStatus');
 const saveStatus = $('#saveStatus');
+const explanationStatus = $('#explanationStatus');
 const explanationResult = $('#explanationResult');
 const explanationStyle = $('#explanationStyle');
 const explanationOverview = $('#explanationOverview');
@@ -449,12 +450,13 @@ function refreshControlAvailability() {
   recordPattern.disabled = canStopRecording
     ? false
     : !recordingAvailable || locked || state.running;
-  recordPattern.textContent = canStopRecording ? '停止录制' : '开始录制';
+  recordPattern.setAttribute('aria-label', canStopRecording ? '停止录制' : '开始录制');
+  recordPattern.setAttribute('aria-pressed', String(canStopRecording));
   recordPattern.classList.toggle('recording', canStopRecording);
   traceRecordControlState('control_refresh');
   recordPattern.title = recordPattern.disabled
     ? `暂不可用：${recordControlSnapshot().blockers.join(', ')}`
-    : '';
+    : canStopRecording ? '停止录制' : '开始录制';
   savePatternButton.disabled = recordingLocksControls() || !hasPattern() || !storageDirty;
   explainPattern.disabled = explanationLoading || locked || !hasPattern() || Boolean(
     serialPort && !patternRevisions.isSynced,
@@ -951,20 +953,15 @@ function stopExplanationLoadingStatus() {
     explanationLoadingTimer = null;
   }
   explanationLoadingStartedAt = null;
-  recordStatus.classList.remove('loading');
+  explanationStatus.classList.remove('loading');
 }
 
 function startExplanationLoadingStatus() {
   stopExplanationLoadingStatus();
   explanationLoadingStartedAt = performance.now();
-  const update = () => {
-    const elapsedMs = performance.now() - explanationLoadingStartedAt;
-    recordStatus.textContent = `AI 正在分析你的鼓点… 已等待 ${formatSeconds(elapsedMs)}`;
-  };
-  recordStatus.classList.remove('error', 'success');
-  recordStatus.classList.add('loading');
-  update();
-  explanationLoadingTimer = window.setInterval(update, 100);
+  explanationStatus.textContent = 'AI正在分析你的鼓点';
+  explanationStatus.classList.remove('error', 'success');
+  explanationStatus.classList.add('loading');
 }
 
 async function explainCurrentPattern() {
@@ -989,17 +986,17 @@ async function explainCurrentPattern() {
     renderExplanation(payload);
     stopExplanationLoadingStatus();
     const elapsed = formatSeconds(payload.latencyMs?.total);
-    recordStatus.textContent = resolution.stale
+    explanationStatus.textContent = resolution.stale
       ? `AI 解释完成，用时 ${elapsed}；Pattern 已更新，这份解释对应修改前版本。`
       : `AI 解释完成，用时 ${elapsed}`;
-    recordStatus.classList.add('success');
+    explanationStatus.classList.add('success');
   } catch (error) {
     const normalized = error instanceof PatternExplanationError
       ? error
       : new PatternExplanationError('client_error', '网页处理 AI 解释时发生错误。');
     stopExplanationLoadingStatus();
-    recordStatus.textContent = `AI 解释失败：${normalized.message} Pattern 和硬件播放不受影响，请重试。`;
-    recordStatus.classList.add('error');
+    explanationStatus.textContent = `AI 解释失败：${normalized.message} Pattern 和硬件播放不受影响，请重试。`;
+    explanationStatus.classList.add('error');
   } finally {
     stopExplanationLoadingStatus();
     explanationLoading = false;
@@ -1026,6 +1023,10 @@ function render(next) {
       'playhead',
       state.running && Number(button.dataset.step) === state.sequenceStep,
     );
+  });
+  padGrid.querySelectorAll('.pad-card').forEach((button, index) => {
+    const active = state.running && Boolean(pattern[index] & (1 << state.sequenceStep));
+    button.classList.toggle('sequence-hit', active);
   });
   if (
     next.padEvent !== undefined
@@ -1372,7 +1373,7 @@ function renderAiState(snapshot) {
     aiPatternNote.textContent = candidate.designNote || '六轨 16 步 Pattern 已通过结构与产品约束校验。';
     if (snapshot.phase === 'ready') {
       aiStatus.textContent = firstPass
-        ? '生成并校验完成，点击“应用”后填入下方 16 步音序器。'
+        ? '生成并校验完成，点击“应用”后填入 16 步音序器。'
         : '首答未通过，已完成一次定向修复；点击“应用”后填入音序器。';
     } else if (snapshot.phase === 'applied') {
       aiStatus.textContent = lastApplyHardwareConfirmed

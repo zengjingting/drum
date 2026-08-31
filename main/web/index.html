@@ -62,25 +62,42 @@
       width: min(1540px, calc(100% - 64px));
       height: 100dvh;
       margin: auto;
-      padding: 18px 0;
+      padding: 12px 0;
       display: grid;
-      grid-template-rows: 64px minmax(0, 1fr);
-      gap: 14px;
+      grid-template-rows: 42px 96px minmax(0, 1fr);
+      gap: 10px;
     }
 
     .topbar {
       min-width: 0;
-      display: grid;
-      grid-template-columns: minmax(190px, auto) minmax(0, 1fr) auto;
+      display: flex;
       align-items: center;
-      gap: 22px;
-      padding: 8px 14px;
+    }
+
+    .hardware-bar {
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 150px 190px minmax(470px, 1fr) 138px;
+      align-items: stretch;
+      overflow: hidden;
       border: 1px solid var(--line-strong);
       border-top-color: rgba(255, 112, 67, .72);
       border-radius: 10px;
       background: linear-gradient(100deg, rgba(25, 28, 30, .98), rgba(12, 16, 18, .96));
       box-shadow: 0 12px 34px rgba(0,0,0,.30), inset 0 1px rgba(255,255,255,.035);
     }
+
+    .hardware-cell {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      padding: 10px 14px;
+      border-right: 1px solid var(--line);
+    }
+    .hardware-cell:last-child { border-right: 0; }
+    .transport-control { flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; }
+    .hardware-bar .connection { min-height: 0; justify-content: center; border: 0; border-radius: 0; background: #0b0f11; }
 
     .brand { display: flex; align-items: center; align-self: stretch; gap: 11px; min-width: 0; }
     .brand > div { display: grid; align-content: center; gap: 3px; }
@@ -111,13 +128,7 @@
     }
     h1 { margin: 0; font-size: 17px; line-height: 1.15; letter-spacing: -.025em; white-space: nowrap; }
 
-    .transport {
-      min-width: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 14px;
-    }
+    .transport { min-width: 0; display: flex; align-items: center; justify-content: center; gap: 14px; }
     .tempo-panel { display: flex; align-items: center; gap: 9px; }
     .tempo-main { display: grid; align-content: center; gap: 4px; }
     .tempo-label { margin: 0; color: var(--muted); font: 700 8px/1 ui-monospace, monospace; letter-spacing: .14em; }
@@ -159,18 +170,39 @@
     .primary.running { color: #07100f; border-color: var(--cool); background: var(--cool); box-shadow: 0 0 24px rgba(113,224,212,.24); }
     .primary.running .play-icon { display: none; }
     .primary.running .stop-icon { display: block; }
-    .beat-strip { display: grid; grid-template-columns: repeat(4, 14px); gap: 10px; align-items: center; }
+    .record-control {
+      width: 42px;
+      min-width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      border: 1px solid rgba(255,112,67,.72);
+      border-radius: 50%;
+      background: #0b0f11;
+      box-shadow: 0 0 20px rgba(255,112,67,.10);
+      cursor: pointer;
+    }
+    .record-icon { width: 13px; height: 13px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px rgba(255,112,67,.55); }
+    .record-control.recording { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 24px rgba(255,112,67,.24); }
+    .record-control.recording .record-icon { width: 12px; height: 12px; border-radius: 2px; background: #fff; box-shadow: none; }
+    .record-control:disabled { cursor: not-allowed; opacity: .36; }
+    .hardware-actions { display: flex; align-items: center; gap: 7px; }
+    .hardware-save { min-height: 30px; padding: 0 10px; }
+    .hardware-status { min-width: 0; display: grid; gap: 2px; margin-left: 9px; }
+    .hardware-status .ai-status { min-height: 0; margin: 0; overflow: hidden; font-size: 8px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+    .beat-strip { display: grid; grid-template-columns: repeat(4, 8px); gap: 6px; align-items: center; }
     .beat {
-      width: 14px;
-      height: 14px;
+      width: 8px;
+      height: 8px;
       position: relative;
       border: 1px solid #263033;
       border-radius: 50%;
       background: #0b0f11;
       transition: 70ms ease;
     }
-    .beat.active { border-color: var(--cool); background: var(--cool); box-shadow: 0 0 0 4px rgba(113,224,212,.10), 0 0 15px rgba(113,224,212,.42); transform: scale(1.08); }
-    .beat.accent { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 4px rgba(255,112,67,.10), 0 0 15px rgba(255,112,67,.42); }
+    .beat.active { border-color: var(--cool); background: var(--cool); box-shadow: 0 0 11px rgba(113,224,212,.45); transform: scale(1.08); }
+    .beat.accent { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 11px rgba(255,112,67,.45); }
 
     .connection {
       display: flex;
@@ -194,8 +226,8 @@
     .workspace {
       min-height: 0;
       display: grid;
-      grid-template-columns: minmax(720px, 3fr) minmax(420px, 2fr);
-      gap: 14px;
+      grid-template-columns: minmax(700px, 1.55fr) minmax(440px, 1fr);
+      gap: 10px;
     }
 
     .instrument-panel, .assistant-panel {
@@ -223,8 +255,8 @@
 
     .instrument-panel {
       display: grid;
-      grid-template-rows: auto minmax(250px, 1fr) auto auto;
-      padding: 17px 18px 14px;
+      grid-template-rows: auto minmax(250px, 1fr) auto;
+      padding: 13px 15px 12px;
     }
     .section-heading {
       display: flex;
@@ -301,22 +333,20 @@
     }
     .step.playhead { outline: 2px solid var(--ink); outline-offset: 2px; transform: translateY(-1px); }
 
-    .pads {
-      margin-top: 14px;
-      padding-top: 12px;
-      border-top: 1px solid var(--line);
-    }
-    .pads-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
-    .pads-head h2 { margin: 0; color: #aeb6b5; font-size: 10px; letter-spacing: .10em; text-transform: uppercase; }
-    .pad-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 7px; }
+    .pads { min-width: 0; display: block; padding: 8px 14px; }
+    .pads-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+    .pads-head h2 { margin: 0; color: #aeb6b5; font: 700 8px/1 ui-monospace, monospace; letter-spacing: .16em; text-transform: uppercase; }
+    .pads-meta { display: flex; align-items: center; gap: 12px; }
+    .pads-sync { color: var(--cool); font: 700 8px/1 ui-monospace, monospace; }
+    .pad-grid { display: grid; grid-template-columns: repeat(6, minmax(58px, 1fr)); gap: 6px; }
     .pad-card {
       --pad: var(--cool);
       min-width: 0;
-      min-height: 48px;
-      display: flex;
-      align-items: center;
-      gap: 9px;
-      padding: 8px 9px;
+      min-height: 40px;
+      display: grid;
+      align-content: center;
+      gap: 4px;
+      padding: 6px 7px;
       overflow: hidden;
       border: 1px solid #2c3739;
       border-radius: 5px;
@@ -327,9 +357,9 @@
       transition: transform 80ms, border-color 80ms, background 80ms;
     }
     .pad-card:hover { border-color: var(--pad); }
-    .pad-card.hit { transform: translateY(-3px); border-color: var(--pad); background: color-mix(in srgb,var(--pad) 13%,#0b1012); box-shadow: 0 0 18px color-mix(in srgb,var(--pad) 14%,transparent); }
-    .pad-key { flex: 0 0 auto; padding: 4px 5px; border: 1px solid color-mix(in srgb,var(--pad) 60%,#263033); border-radius: 3px; color: var(--pad); font: 800 8px/1 ui-monospace, monospace; }
-    .pad-name { min-width: 0; overflow: hidden; font-size: 10px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+    .pad-card.hit, .pad-card.sequence-hit { transform: translateY(-3px); border-color: var(--pad); background: color-mix(in srgb,var(--pad) 13%,#0b1012); box-shadow: 0 0 18px color-mix(in srgb,var(--pad) 14%,transparent); }
+    .pad-key { justify-self: start; padding: 0; border: 0; color: var(--pad); font: 800 8px/1 ui-monospace, monospace; }
+    .pad-name { min-width: 0; overflow: hidden; font-size: 9px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
 
     .sequence-footer {
       display: flex;
@@ -342,7 +372,7 @@
     .sequence-footer strong { color: var(--ink); font-weight: 700; }
     .sequence-status.error { color: var(--danger); }
 
-    .assistant-panel { display: flex; flex-direction: column; overflow-y: auto; scrollbar-color: #3c484a transparent; }
+    .assistant-panel { display: flex; flex-direction: column; overflow: hidden; scrollbar-color: #3c484a transparent; }
     .assistant-head {
       display: flex;
       align-items: center;
@@ -355,18 +385,19 @@
     .assistant-title { display: flex; align-items: center; gap: 9px; }
     .assistant-orb { width: 9px; height: 9px; border: 1px solid var(--cool); border-radius: 50%; box-shadow: 0 0 12px var(--cool), inset 0 0 5px var(--cool); }
     .assistant-title h2 { margin: 0; font-size: 12px; letter-spacing: .08em; }
-    .assistant-section { padding: 14px 16px; }
+    .assistant-section { padding: 10px 15px 11px; }
     .assistant-section + .assistant-section { border-top: 1px solid var(--line); }
     .assistant-section .section-heading { align-items: flex-start; margin-bottom: 10px; }
     .ai-panel, .recording-panel { margin: 0; }
 
-    .ai-compose { display: grid; gap: 8px; }
+    .ai-compose { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; align-items: stretch; }
     .ai-compose textarea {
       width: 100%;
-      min-height: 88px;
-      max-height: 160px;
-      resize: vertical;
-      padding: 11px 12px;
+      min-height: 38px;
+      height: 38px;
+      max-height: 72px;
+      resize: none;
+      padding: 8px 10px;
       border: 1px solid #334043;
       border-radius: 6px;
       color: var(--ink);
@@ -375,6 +406,7 @@
       line-height: 1.55;
     }
     .ai-compose textarea::placeholder { color: #596466; }
+    .ai-actions { display: grid; grid-template-columns: repeat(3, auto); gap: 6px; }
     .ai-action {
       min-height: 36px;
       padding: 0 12px;
@@ -399,7 +431,7 @@
     .ai-status.loading { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border: 1px solid rgba(113,224,212,.28); border-radius: 6px; color: var(--cool); background: var(--cool-soft); font-weight: 700; }
     .ai-status.loading::before { content: ""; width: 12px; height: 12px; flex: 0 0 auto; border: 2px solid rgba(113,224,212,.25); border-top-color: var(--cool); border-radius: 50%; animation: spin 700ms linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .ai-result { margin-top: 11px; padding: 10px 0 0 11px; border-top: 1px solid var(--line); border-left: 2px solid var(--cool); }
+    .ai-result { margin-top: 8px; padding: 8px 0 0; border-top: 1px solid var(--line); }
     .ai-result-head { display: grid; gap: 9px; }
     .ai-result-title { margin: 0; font-size: 13px; }
     .ai-result-meta, .ai-note { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
@@ -411,40 +443,41 @@
     .record-status-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
     .record-status-row .ai-status:last-child { text-align: right; }
 
-    .explanation-result { margin-top: 10px; padding: 11px; border: 1px solid #2f3b3d; border-radius: 6px; background: #0a0e10; }
+    .explanation-status { margin: 0 15px; }
+    .explanation-result { min-height: 0; flex: 1; overflow-y: auto; margin: 0 15px 13px; padding: 10px 8px 0 0; border-top: 1px solid var(--line); background: transparent; scrollbar-color: #3c484a transparent; }
     .explanation-label { margin: 0 0 5px; color: #82908f; font-size: 9px; letter-spacing: .10em; text-transform: uppercase; }
-    .explanation-style { margin: 0; color: var(--cool); font-family: "IBM Plex Mono", monospace; font-size: 22px; line-height: 1.2; }
-    .explanation-overview { margin: 7px 0 0; color: #c5cecd; font-size: 12px; line-height: 1.6; }
+    .explanation-style { margin: 0; color: var(--cool); font-family: "IBM Plex Mono", monospace; font-size: 24px; line-height: 1.2; }
+    .explanation-overview { margin: 7px 0 0; color: #c5cecd; font-size: 11px; line-height: 1.55; }
     .explanation-block { margin-top: 13px; padding-top: 12px; border-top: 1px solid #252e30; }
     .explanation-block h4 { margin: 0 0 7px; color: #eef2f0; font-size: 12px; font-weight: 650; }
-    .explanation-block p { margin: 0; color: #b7c0bf; font-size: 12px; line-height: 1.62; }
-    .evidence-list { margin: 0; padding-left: 19px; color: #c8d0cf; font-size: 12px; line-height: 1.6; }
+    .explanation-block p { margin: 0; color: #b7c0bf; font-size: 11px; line-height: 1.54; }
+    .evidence-list { margin: 0; padding-left: 19px; color: #c8d0cf; font-size: 11px; line-height: 1.54; }
     .suggestion-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
     .suggestion-list li { display: grid; gap: 3px; padding: 8px; border-left: 2px solid var(--accent); background: #101517; }
-    .suggestion-list strong { color: #e7ecea; font-size: 12px; font-weight: 650; line-height: 1.5; }
-    .suggestion-list span { color: #a3aead; font-size: 11px; line-height: 1.5; }
+    .suggestion-list strong { color: #e7ecea; font-size: 11px; font-weight: 650; line-height: 1.45; }
+    .suggestion-list span { color: #a3aead; font-size: 10px; line-height: 1.45; }
     .explanation-stale { margin: 9px 0 0; color: var(--accent); font-size: 11px; }
     .pattern-version { color: var(--cool); font: 700 9px/1 ui-monospace, monospace; white-space: nowrap; }
 
     @media (max-width: 1080px) {
       body { overflow: auto; }
-      main { width: min(920px, calc(100% - 28px)); height: auto; min-height: 100dvh; grid-template-rows: auto auto; }
-      .topbar { grid-template-columns: 1fr auto; }
-      .transport { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; padding-top: 8px; border-top: 1px solid var(--line); }
+      main { width: min(920px, calc(100% - 28px)); height: auto; min-height: 100dvh; grid-template-rows: auto auto auto; }
+      .hardware-bar { grid-template-columns: 150px minmax(200px, 1fr) 138px; min-height: 174px; }
+      .hardware-bar .pads { grid-column: 1 / -1; grid-row: 2; border-top: 1px solid var(--line); }
       .workspace { grid-template-columns: 1fr; }
       .instrument-panel { min-height: 610px; }
       .assistant-panel { overflow: visible; }
+      .explanation-result { max-height: 620px; }
       .assistant-section { padding: 16px; }
     }
 
     @media (max-width: 680px) {
       main { width: calc(100% - 18px); padding: 9px 0 28px; gap: 9px; }
-      .topbar { gap: 10px; padding: 10px; }
+      .topbar { gap: 10px; }
+      .hardware-bar { grid-template-columns: 130px 1fr; }
+      .hardware-bar .connection { grid-column: 1 / -1; min-height: 44px; }
       .connection { padding: 0 10px; }
       .connection span:last-child { max-width: 82px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-      .transport { flex-wrap: wrap; gap: 9px; }
-      .transport-divider { display: none; }
-      .beat-strip { order: 3; }
       .workspace { gap: 9px; }
       .instrument-panel { min-height: 590px; padding: 14px 10px 12px; }
       .section-heading { align-items: flex-start; }
@@ -467,21 +500,38 @@
         <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
         <div><p class="eyebrow">EasyInput · 96 PPQN</p><h1>AI Drum Machine</h1></div>
       </div>
+    </header>
 
-      <div class="transport" aria-label="速度与播放控制">
+    <section class="hardware-bar" aria-label="播放、录制与硬件实时状态">
+      <div class="hardware-cell" aria-label="速度控制">
         <div class="tempo-panel">
           <div class="tempo-main"><p class="tempo-label">TEMPO</p><div class="tempo-readout"><span id="bpmValue">120</span><span class="unit">BPM</span></div><p class="tempo-state" id="tempoState">MANUAL</p></div>
           <div class="tempo-buttons"><button class="icon-button" id="slower" type="button" aria-label="速度减一" disabled>−</button><button class="icon-button" id="faster" type="button" aria-label="速度加一" disabled>＋</button></div>
         </div>
-        <span class="transport-divider" aria-hidden="true"></span>
-        <div class="play-panel">
-          <button class="primary" id="toggle" type="button" aria-label="开始播放" aria-pressed="false" disabled><span class="play-icon" aria-hidden="true"></span><span class="stop-icon" aria-hidden="true"></span></button>
-          <div class="beat-strip" aria-label="四拍显示"><div class="beat" aria-label="第 1 拍"></div><div class="beat" aria-label="第 2 拍"></div><div class="beat" aria-label="第 3 拍"></div><div class="beat" aria-label="第 4 拍"></div></div>
-        </div>
       </div>
 
+      <div class="hardware-cell transport-control">
+        <div class="hardware-actions">
+          <button class="primary" id="toggle" type="button" aria-label="开始播放" aria-pressed="false" disabled><span class="play-icon" aria-hidden="true"></span><span class="stop-icon" aria-hidden="true"></span></button>
+          <button class="record-control" id="recordPattern" type="button" aria-label="开始录制" aria-pressed="false" disabled><span class="record-icon" aria-hidden="true"></span></button>
+          <button class="text-button hardware-save" id="savePattern" type="button" disabled>保存</button>
+        </div>
+        <div class="hardware-status"><p class="ai-status" id="recordStatus" aria-live="polite">连接支持录制的固件后开始。</p><p class="ai-status" id="saveStatus" aria-live="polite">尚未保存</p></div>
+      </div>
+
+      <section class="hardware-cell pads" aria-labelledby="padsTitle">
+        <div class="pads-head">
+          <h2 id="padsTitle">Hardware Pad Monitor</h2>
+          <div class="pads-meta">
+            <div class="beat-strip" aria-label="四拍显示"><div class="beat" aria-label="第 1 拍"></div><div class="beat" aria-label="第 2 拍"></div><div class="beat" aria-label="第 3 拍"></div><div class="beat" aria-label="第 4 拍"></div></div>
+            <span class="pads-sync">● LIVE SYNC</span>
+          </div>
+        </div>
+        <div class="pad-grid" id="padGrid"></div>
+      </section>
+
       <button class="connection" id="connectDevice" type="button" aria-live="polite"><span class="dot" aria-hidden="true"></span><span id="connectionText">连接设备</span></button>
-    </header>
+    </section>
 
     <div class="workspace">
       <section class="instrument-panel" aria-labelledby="sequenceTitle">
@@ -492,56 +542,49 @@
 
         <div class="sequence-scroll"><div class="sequence-grid" id="sequenceGrid"></div></div>
 
-        <section class="pads" aria-labelledby="padsTitle">
-          <div class="pads-head"><h2 id="padsTitle">Hardware Pad Monitor</h2></div>
-          <div class="pad-grid" id="padGrid"></div>
-        </section>
-
         <div class="sequence-footer"><span class="sequence-status" id="patternStatus" aria-live="polite">连接设备后同步</span></div>
       </section>
 
-      <aside class="assistant-panel" aria-label="AI 创作、录制与解释">
+      <aside class="assistant-panel" aria-label="AI 编写与解释">
         <div class="assistant-head">
           <div class="assistant-title"><span class="assistant-orb" aria-hidden="true"></span><h2>AI COPILOT</h2></div>
         </div>
 
         <section class="assistant-section ai-panel" aria-labelledby="aiTitle">
-          <div class="section-heading"><div><h2 id="aiTitle">用一句话编写鼓点</h2><p>生成候选后，点击“应用”写入左侧主音序器</p></div></div>
-          <div class="ai-compose"><textarea id="aiPrompt" maxlength="500" placeholder="例如：给我一个 92 BPM、松弛一点的 Boom Bap，底鼓不要太密，第二和第四拍有军鼓。"></textarea><button class="ai-action" id="generatePattern" type="button">生成鼓点</button></div>
+          <div class="section-heading"><div><h2 id="aiTitle">AI编写鼓点</h2></div></div>
+          <div class="ai-compose">
+            <textarea id="aiPrompt" maxlength="500" placeholder="例如：给我一个 92 BPM、松弛一点的 Boom Bap，底鼓不要太密，第二和第四拍有军鼓。"></textarea>
+            <div class="ai-actions">
+              <button class="ai-action" id="generatePattern" type="button">生成鼓点</button>
+              <button class="ai-action secondary" id="applyAiPattern" type="button" disabled>应用</button>
+              <button class="ai-action secondary" id="explainPattern" type="button" disabled>AI 解释</button>
+            </div>
+          </div>
           <p class="ai-status" id="aiStatus" aria-live="polite"></p>
           <div class="ai-result" id="aiResult" hidden>
-            <div class="ai-result-head"><div><h3 class="ai-result-title" id="aiPatternTitle"></h3><p class="ai-result-meta" id="aiPatternMeta"></p><p class="ai-note" id="aiPatternNote"></p></div><button class="ai-action secondary" id="applyAiPattern" type="button" disabled>应用</button></div>
+            <div class="ai-result-head"><div><h3 class="ai-result-title" id="aiPatternTitle"></h3><p class="ai-result-meta" id="aiPatternMeta"></p><p class="ai-note" id="aiPatternNote"></p></div></div>
           </div>
         </section>
 
-        <section class="assistant-section recording-panel" aria-labelledby="recordingTitle">
-          <div class="section-heading"><div><h2 id="recordingTitle">录制实体演奏</h2><p>停止后近似量化到左侧音序器，再由 AI 解释</p></div></div>
-          <div class="record-actions">
-            <button class="ai-action record-button" id="recordPattern" type="button" disabled>开始录制</button>
-            <button class="ai-action secondary" id="savePattern" type="button" disabled>保存</button>
-            <button class="ai-action secondary" id="explainPattern" type="button" disabled>AI 解释</button>
-          </div>
-          <div class="record-status-row"><p class="ai-status" id="recordStatus" aria-live="polite">连接支持录制的固件后开始。</p><p class="ai-status" id="saveStatus" aria-live="polite">尚未保存</p></div>
-          <div class="explanation-result" id="explanationResult" hidden>
-            <p class="explanation-label">最接近的风格</p>
-            <h3 class="explanation-style" id="explanationStyle"></h3>
-            <p class="explanation-overview" id="explanationOverview"></p>
-            <section class="explanation-block" aria-labelledby="explanationReasonsTitle">
-              <h4 id="explanationReasonsTitle">为什么这样判断</h4>
-              <ol class="evidence-list" id="explanationReasons"></ol>
-            </section>
-            <section class="explanation-block" aria-labelledby="explanationLessonTitle">
-              <p class="explanation-label">风格小课堂</p>
-              <h4 id="explanationLessonTitle"></h4>
-              <p id="explanationLessonContent"></p>
-            </section>
-            <section class="explanation-block" aria-labelledby="explanationSuggestionsTitle">
-              <h4 id="explanationSuggestionsTitle">让鼓点更好听，可以试试</h4>
-              <ul class="suggestion-list" id="explanationSuggestions"></ul>
-            </section>
-            <p class="explanation-stale" id="explanationStale" hidden>当前 Pattern 已修改，这份解释对应修改前版本。</p>
-          </div>
-        </section>
+        <p class="ai-status explanation-status" id="explanationStatus" aria-live="polite"></p>
+        <div class="explanation-result" id="explanationResult">
+          <p class="explanation-label">最接近的风格</p>
+          <h3 class="explanation-style" id="explanationStyle">Boom Bap</h3>
+          <p class="explanation-overview" id="explanationOverview">Boom Bap 兴起于 20 世纪 80–90 年代的纽约 Hip-Hop 场景，常用于强调说唱律动、采样质感和头部摆动感的作品。</p>
+          <section class="explanation-block" aria-labelledby="explanationReasonsTitle">
+            <h4 id="explanationReasonsTitle">为什么这样判断</h4>
+            <ol class="evidence-list" id="explanationReasons"><li>Kick 在第 1、7、9、15 步形成稀疏但有切分变化的低频骨架。</li><li>Snare 稳定落在第 5、13 步，对应第二和第四拍的经典反拍位置。</li><li>Closed Hi-Hat 使用八分音符骨架，保持稳定但不过度拥挤。</li></ol>
+          </section>
+          <section class="explanation-block" aria-labelledby="explanationLessonTitle">
+            <h4 id="explanationLessonTitle">Boom Bap 鼓点通常怎么编排？</h4>
+            <p id="explanationLessonContent">底鼓负责建立重量并加入少量切分，军鼓通常稳定强调第二和第四拍，闭镲则维持八分音符或带少量变化的细分。三者的疏密关系决定了律动是更松弛还是更有推进感。</p>
+          </section>
+          <section class="explanation-block" aria-labelledby="explanationSuggestionsTitle">
+            <h4 id="explanationSuggestionsTitle">让鼓点更好听</h4>
+            <ul class="suggestion-list" id="explanationSuggestions"><li><strong>在第 16 步加入一次较轻的 Rimshot。</strong><span>听感：小节结尾会更有提示感。</span><span>练习：听辨 Fill 如何把节奏带回下一小节。</span></li></ul>
+          </section>
+          <p class="explanation-stale" id="explanationStale" hidden>当前 Pattern 已修改，这份解释对应修改前版本。</p>
+        </div>
       </aside>
     </div>
   </main>
