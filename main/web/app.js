@@ -98,6 +98,8 @@ let recordingAvailable = false;
 let hardwareCaptureAvailable = false;
 let revisionCommitAvailable = false;
 let captureReadySent = false;
+let deviceCaptureReady = false;
+let captureReadyTransaction = null;
 let serialPort = null;
 let reader = null;
 let writer = null;
@@ -165,12 +167,80 @@ function traceDeviceState(message) {
     pattern: Array.isArray(message.pattern)
       ? message.pattern.map((value) => Number(value) & 0xffff)
       : null,
+    patternRevision: Number(message.patternRevision),
+    captureState: String(message.captureState || 'unknown'),
+    captureReady: Boolean(message.captureReady),
     metronomeClickExpected: false,
   };
   const signature = JSON.stringify(payload);
   if (signature === lastTracedDeviceState) return;
   lastTracedDeviceState = signature;
   traceRecording('device_state', payload);
+}
+
+function waitForCaptureReadyAck(timeoutMs = COMMAND_TIMEOUT_MS) {
+  if (captureReadyTransaction) return captureReadyTransaction.promise;
+  let resolvePromise;
+  let rejectPromise;
+  const promise = new Promise((resolve, reject) => {
+    resolvePromise = resolve;
+    rejectPromise = reject;
+  });
+  const transaction = {
+    promise,
+    timeout: null,
+    resolve: (message) => {
+      clearTimeout(transaction.timeout);
+      if (captureReadyTransaction === transaction) captureReadyTransaction = null;
+      deviceCaptureReady = true;
+      captureReadySent = true;
+      resolvePromise(message);
+    },
+    reject: (error) => {
+      clearTimeout(transaction.timeout);
+      if (captureReadyTransaction === transaction) captureReadyTransaction = null;
+      deviceCaptureReady = false;
+      captureReadySent = false;
+      rejectPromise(error);
+    },
+  };
+  transaction.timeout = setTimeout(() => {
+    transaction.reject(new AiPatternError(
+      'protocol_timeout',
+      '硬件未确认录制就绪状态。',
+    ));
+  }, timeoutMs);
+  captureReadyTransaction = transaction;
+  return promise;
+}
+
+function rejectCaptureReady(error) {
+  if (!captureReadyTransaction) return false;
+  captureReadyTransaction.reject(error);
+  return true;
+}
+
+async function ensureCaptureReady({ force = false } = {}) {
+  if (!recordingAvailable || !writer) {
+    throw new AiPatternError('protocol_error', '设备尚未具备录制就绪能力。');
+  }
+  if (!force && deviceCaptureReady) return true;
+  if (captureReadyTransaction) {
+    await captureReadyTransaction.promise;
+    return true;
+  }
+  const ack = waitForCaptureReadyAck();
+  captureReadySent = true;
+  traceRecording('capture_ready_requested', { force, deviceCaptureReady });
+  try {
+    await sendCommand('CAPTURE READY 1', true);
+    await ack;
+    return true;
+  } catch (error) {
+    rejectCaptureReady(error);
+    try { await ack; } catch (_) { /* consume rejected readiness waiter */ }
+    throw error;
+  }
 }
 
 function buildInterface() {
@@ -408,6 +478,8 @@ function applyCapabilities(message) {
     revisionCommit,
     unavailableMessage,
   );
+  deviceCaptureReady = message.captureReady === true;
+  if (!deviceCaptureReady) captureReadySent = false;
   if ((!padEvents || !hardwareCapture || !revisionCommit) && serialPort && !recordingLocksControls()) {
     recordStatus.textContent = '当前固件不支持实体演奏录制，请升级并重新烧录。';
     recordStatus.classList.add('error');
@@ -418,9 +490,13 @@ function applyCapabilities(message) {
     recordStatus.textContent = '设备已支持 S8 / 网页录制；开始后自由演奏。';
     recordStatus.classList.remove('error');
   }
-  if (recordingAvailable && !captureReadySent && writer) {
-    captureReadySent = true;
-    void sendCommand('CAPTURE READY 1');
+  if (recordingAvailable && !deviceCaptureReady && writer) {
+    void ensureCaptureReady().catch((error) => {
+      if (!recordingLocksControls()) {
+        recordStatus.textContent = `录制就绪失败：${error.message}`;
+        recordStatus.classList.add('error');
+      }
+    });
   }
   if (becameAvailable && patternDirty) void syncPattern();
 }
@@ -428,6 +504,7 @@ function applyCapabilities(message) {
 function rejectPendingTransactions(error) {
   patternAckGate.reject(error);
   recordingBoundaryGate.reject(error);
+  rejectCaptureReady(error);
   for (const waiter of stateWaiters) waiter.reject(error);
   stateWaiters.clear();
   if (recordingLocksControls()) {
@@ -637,11 +714,14 @@ async function startPadRecording() {
   recordingPhase = 'starting';
   recordedPadEvents = [];
   recordingStart = null;
-  recordStatus.textContent = '正在等待硬件确认录制起点…';
+  recordStatus.textContent = '正在确认硬件录制就绪状态…';
   recordStatus.classList.remove('error', 'success');
   refreshControlAvailability();
-  const boundary = recordingBoundaryGate.wait('started', COMMAND_TIMEOUT_MS);
+  let boundary = null;
   try {
+    await ensureCaptureReady({ force: true });
+    recordStatus.textContent = '正在等待硬件确认录制起点…';
+    boundary = recordingBoundaryGate.wait('started', COMMAND_TIMEOUT_MS);
     await sendCommand('RECORD START', true);
     const started = await boundary;
     recordingStart = started;
@@ -656,7 +736,9 @@ async function startPadRecording() {
       message: error?.message || '开始录制失败',
     });
     recordingBoundaryGate.reject(error);
-    try { await boundary; } catch (_) { /* consume rejected boundary */ }
+    if (boundary) {
+      try { await boundary; } catch (_) { /* consume rejected boundary */ }
+    }
     void sendCommand('RECORD STOP');
     setRecordingError(error);
   }
@@ -987,6 +1069,20 @@ function handleLine(line) {
       patternAckGate.acknowledge(message);
       return;
     }
+    if (message.type === 'ack' && message.command === 'CAPTURE READY') {
+      if (!closing) {
+        deviceCaptureReady = true;
+        captureReadySent = true;
+        traceRecording('capture_ready_ack_received');
+        captureReadyTransaction?.resolve(message);
+      }
+      return;
+    }
+    if (message.type === 'ack' && message.command === 'ABORT') {
+      deviceCaptureReady = false;
+      captureReadySent = false;
+      return;
+    }
     if (message.type === 'pad') {
       try {
         const event = validatePadEvent(message);
@@ -1042,7 +1138,9 @@ function handleLine(line) {
     if (message.type === 'error') {
       const detail = String(message.message || '设备拒绝了命令');
       const error = new AiPatternError('protocol_error', `设备拒绝命令：${detail}`);
-      if (patternAckGate.hasPending) {
+      if (captureReadyTransaction) {
+        rejectCaptureReady(error);
+      } else if (patternAckGate.hasPending) {
         patternAckGate.reject(error);
       } else if (recordingBoundaryGate.hasPending) {
         recordingBoundaryGate.reject(error);
@@ -1090,6 +1188,7 @@ async function readSerial(port) {
       patternQueued = patternDirty;
       rejectPendingTransactions(new AiPatternError('transport_error', '串口连接已中断。'));
       captureReadySent = false;
+      deviceCaptureReady = false;
       patternRevisions.markDisconnected();
       setProtocolFeatures(false, false, false, false, false, '连接设备后同步');
       setConnection('offline', '重新连接');
@@ -1140,6 +1239,7 @@ async function disconnectSerial(label = '连接设备') {
   patternInFlight = false;
   patternQueued = patternDirty;
   captureReadySent = false;
+  deviceCaptureReady = false;
   patternRevisions.markDisconnected();
   closing = false;
   setProtocolFeatures(false, false, false, false, false, '连接设备后同步');
@@ -1153,6 +1253,7 @@ async function connectSerial() {
   }
   try {
     captureReadySent = false;
+    deviceCaptureReady = false;
     setProtocolFeatures(false, false, false, false, false, '正在确认固件能力…');
     setConnection('offline', '选择串口…');
     const port = await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x303a }] });

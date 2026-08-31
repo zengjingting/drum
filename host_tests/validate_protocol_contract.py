@@ -17,6 +17,9 @@ required_firmware_fragments = (
     'strcmp(command, "ABORT") == 0',
     'strcmp(command, "RECORD START") == 0',
     'strcmp(command, "RECORD STOP") == 0',
+    'Recording requires CAPTURE READY 1',
+    'Recording is unavailable during playback',
+    'Recording is busy in capture state %s',
     r'\"type\":\"pad\"',
     'metronome_app_subscribe_pad_events(s_pad_event_queue)',
 )

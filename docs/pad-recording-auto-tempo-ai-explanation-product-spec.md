@@ -1,7 +1,7 @@
 # EasyInput AI 鼓机：实体录制、自动 Tempo、16 步 Pattern 与 AI 解释产品规格
 
 日期：2026-08-31  
-状态：产品方案、代码、自动化测试和固件编译已完成；尚未烧录本版固件或完成真机体验验收
+状态：协议 v3 已烧录并完成部分真机验收；capture readiness稳定性修复待重新烧录与复测，AI解释等完整体验仍待验收
 适用阶段：实体 Pad 演奏反向进入 16 步音序器，并由 DeepSeek 解释最新 Pattern  
 历史基线：[`pad-recording-ai-explanation-mvp-decisions.md`](pad-recording-ai-explanation-mvp-decisions.md)
 记录的 Web 录制、事件上报、固定 BPM量化和 AI解释实现仍作为历史证据；与本规格冲突的未来行为
@@ -610,11 +610,42 @@ COMMIT 12 40 4369 0 0 0 21845 0
   Tempo候选、Mask、revision和旧 ACK拒绝测试通过；
 - `sh host_tests/run_tests.sh`：计时、混音、编码器、六个 PCM资源及协议 v3合同测试通过；
 - `node --check main/web/app.js`与 `git diff --check`通过；
-- 使用 `espressif/idf:v5.5.5`完成 ESP32-S3固件编译，应用镜像为 `0x6e420`字节，最小
-  App分区剩余约 86%。
+- 使用 `espressif/idf:v5.5.5`完成 ESP32-S3固件编译；readiness修复前已烧录镜像为
+  `0x6e420`字节，当前待复测镜像为 `0x6e570`字节，最小 App分区仍剩余约 86%。
 
 上述结果只证明代码合同和可构建性，不证明开发板输入、电平、串口时序、扬声器听感或用户操作
 已经通过。下一次必须在烧录后依次验证：S8开始/停止、首击不丢、Tempo候选、候选重算、无额外
 click、编码器仅在回放中调速、网页 BPM跟随、播放中编辑、旧 revision拒绝、断开后板端继续播放，
 以及 AI只解释点击时的最新已确认 Pattern。浏览器自动可视化检查本轮受本地 URL安全策略限制，
 因此页面布局也保留为人工验收项。
+
+## 15. 真机增量验收与 readiness稳定性修复
+
+2026-08-31 已获得以下真机与用户证据：
+
+- 协议 v3固件烧录成功，bootloader、partition table和 App镜像均通过写入 Hash校验；
+- 串口握手确认 `hardwareCaptureButton`、`padEvents`、`revisionCommit`能力，初始状态为
+  120 BPM、停止、Capture idle；
+- 用户使用 S8完成录制和停止，8条 Pad事件编号连续且 `dropped=0`，只出现实际演奏的 S1与
+  S5音轨；
+- 本地算法推荐 53 BPM，候选 53/106/212 BPM均完成原子 COMMIT，用户试听确认 53 BPM符合
+  实际听感；
+- revision 7–10的 Mask、BPM与固件 ACK逐项一致，53 BPM回放时16步推进正常且无额外 click；
+- 录制中间约6秒停顿导致后4次敲击超出首个16步小节并按既定边界忽略；功能行为正确，但结果
+  文案需要明确展示“录制/写入/超出小节”的数量。
+
+增量验收发现：用户编辑 Pattern后再次点击开始录制，固件连续拒绝 `RECORD START`；清空
+Pattern仍无效，而网页断开重连后立即恢复。Trace证明设备停止且前序 COMMIT均已完成，因此根因
+确认是网页本地 `captureReadySent`与固件 `captureReady`失步，而非 Pattern内容或播放状态。
+
+稳定性修复合同：
+
+- 网页以每条设备 STATE的 `captureReady`为权威；若设备返回 false，自动补发 readiness；
+- 每次网页录制前强制发送 `CAPTURE READY 1`并等待 ACK，再发送 `RECORD START`；
+- 断线、ABORT、超时或协议错误同时清空网页 readiness，不遗留伪就绪状态；
+- Trace记录 `captureState`、`captureReady`、`patternRevision`以及 readiness请求/ACK；
+- 固件将泛化的 start/stop失败拆分为未就绪、播放中、Capture忙和边界应用失败，便于现场诊断。
+
+上述修复完成自动化与编译后仍需一次增量真机复测：连接后录制成功 → 编辑多个音序格 → 不清空
+Pattern直接再次录制 → 确认自动重新握手且旧工作 Pattern被清空。只有该复测通过，readiness问题
+才能标记为关闭。

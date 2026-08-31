@@ -18,7 +18,10 @@ assert.match(indexHtml, /id="explainPattern"[^>]*>AI 解释<\/button>/);
 assert.match(appSource, /capabilities\.has\('padEvents'\)/);
 assert.match(appSource, /capabilities\.has\('hardwareCaptureButton'\)/);
 assert.match(appSource, /capabilities\.has\('revisionCommit'\)/);
-assert.match(appSource, /sendCommand\('CAPTURE READY 1'\)/);
+assert.match(appSource, /sendCommand\('CAPTURE READY 1', true\)/);
+assert.match(appSource, /ensureCaptureReady\(\{ force: true \}\)/);
+assert.match(appSource, /message\.captureReady === true/);
+assert.match(appSource, /message\.command === 'CAPTURE READY'/);
 assert.match(appSource, /sendCommand\('RECORD START'/);
 assert.match(appSource, /sendCommand\('RECORD STOP'/);
 assert.match(appSource, /validateRecordBoundary,/);
@@ -31,8 +34,13 @@ for (const stage of [
   'pattern_ack_received',
   'playback_toggle_requested',
   'device_state',
+  'capture_ready_requested',
+  'capture_ready_ack_received',
 ]) {
   assert.match(appSource, new RegExp(stage), `recording trace must include ${stage}`);
+}
+for (const field of ['captureState', 'captureReady', 'patternRevision']) {
+  assert.match(appSource, new RegExp(field), `device trace must include ${field}`);
 }
 assert.match(
   appSource,

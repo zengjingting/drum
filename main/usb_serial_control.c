@@ -210,15 +210,36 @@ static void handle_command(char *command)
     }
 
     if (strcmp(command, "RECORD START") == 0) {
+        const capture_state_t capture_state = capture_controller_get_state();
+        if (!capture_controller_is_ready()) {
+            send_error("Recording requires CAPTURE READY 1");
+            return;
+        }
+        if (metronome_app_get_state().running) {
+            send_error("Recording is unavailable during playback");
+            return;
+        }
+        if (capture_state != CAPTURE_STATE_IDLE) {
+            char message[96];
+            snprintf(message, sizeof(message),
+                     "Recording is busy in capture state %s",
+                     capture_controller_state_name(capture_state));
+            send_error(message);
+            return;
+        }
         if (!capture_controller_start(CAPTURE_ORIGIN_WEB)) {
-            send_error("Recording start could not be queued");
+            send_error("Recording start boundary could not be applied");
         }
         return;
     }
 
     if (strcmp(command, "RECORD STOP") == 0) {
+        if (capture_controller_get_state() != CAPTURE_STATE_RECORDING) {
+            send_error("Recording stop requires an active recording");
+            return;
+        }
         if (!capture_controller_stop(CAPTURE_ORIGIN_WEB)) {
-            send_error("Recording stop could not be queued");
+            send_error("Recording stop boundary could not be applied");
         }
         return;
     }
