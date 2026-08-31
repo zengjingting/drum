@@ -26,6 +26,7 @@ import { detectTempoCandidates } from './tempo-detection.js';
 const REQUIRED_PROTOCOL_VERSION = 3;
 const COMMAND_TIMEOUT_MS = 3500;
 const RECORDING_TRACE_ENDPOINT = '/api/debug/recording-trace';
+const DEFAULT_PATTERN_NAME = '我的鼓点';
 const instruments = [
   { key: 'S1', name: 'Kick', color: '#ff7043' },
   { key: 'S2', name: 'Snare', color: '#ffb45b' },
@@ -40,10 +41,9 @@ const padGrid = $('#padGrid');
 const sequenceGrid = $('#sequenceGrid');
 const squares = [...document.querySelectorAll('.beat')];
 const bpmValue = $('#bpmValue');
-const barDuration = $('#barDuration');
 const tempoState = $('#tempoState');
-const tempoCandidates = $('#tempoCandidates');
 const patternStatus = $('#patternStatus');
+const patternVersion = $('#patternVersion');
 const toggle = $('#toggle');
 const slower = $('#slower');
 const faster = $('#faster');
@@ -59,7 +59,6 @@ const aiPatternTitle = $('#aiPatternTitle');
 const aiPatternMeta = $('#aiPatternMeta');
 const aiPatternNote = $('#aiPatternNote');
 const applyAiPattern = $('#applyAiPattern');
-const patternName = $('#patternName');
 const recordPattern = $('#recordPattern');
 const savePatternButton = $('#savePattern');
 const explainPattern = $('#explainPattern');
@@ -67,6 +66,7 @@ const recordStatus = $('#recordStatus');
 const saveStatus = $('#saveStatus');
 const explanationResult = $('#explanationResult');
 const explanationStyle = $('#explanationStyle');
+const explanationOverview = $('#explanationOverview');
 const explanationReasons = $('#explanationReasons');
 const explanationLessonTitle = $('#explanationLessonTitle');
 const explanationLessonContent = $('#explanationLessonContent');
@@ -120,6 +120,8 @@ let explanationLoading = false;
 let explanationPayload = null;
 let explanationSourceRevision = null;
 let explanationRequestSequence = 0;
+let explanationLoadingStartedAt = null;
+let explanationLoadingTimer = null;
 let patternApproximateQuantization = false;
 let recordingTraceSessionId = null;
 let recordingTraceSequence = 0;
@@ -386,6 +388,7 @@ function markPatternChanged(source = 'manual') {
     approximateQuantization: patternApproximateQuantization,
   });
   storageDirty = true;
+  patternVersion.textContent = `Pattern v${snapshot.revision}`;
   saveStatus.textContent = '有未保存修改';
   saveStatus.classList.remove('success');
   if (explanationPayload) {
@@ -397,11 +400,10 @@ function markPatternChanged(source = 'manual') {
   return snapshot;
 }
 
-function markPatternNameChanged() {
-  storageDirty = true;
-  saveStatus.textContent = '有未保存修改';
-  saveStatus.classList.remove('success');
-  refreshControlAvailability();
+function formatSeconds(milliseconds) {
+  const numeric = Number(milliseconds);
+  if (!Number.isFinite(numeric) || numeric < 0) return '—';
+  return `${(numeric / 1000).toFixed(1)} 秒`;
 }
 
 function renderTempo() {
@@ -413,11 +415,9 @@ function renderTempo() {
   } else if (tempoPhase === 'detecting') {
     value = '--';
     mode = 'AUTO · 检测中';
-  } else if (tempoPhase === 'candidates') {
+  } else if (tempoPhase === 'detected') {
     value = selectedBpm;
-    mode = tempoDetection?.status === 'ambiguous'
-      ? `AUTO · 候选待试听 · ${tempoDetection.eventCount} HITS`
-      : `AUTO · ${tempoDetection?.eventCount || 0} HITS`;
+    mode = `检测完成 · ${selectedBpm} BPM`;
   } else if (tempoPhase === 'syncing') {
     value = commitBpm ?? selectedBpm;
     mode = `SYNC · v${patternRevisions.currentRevision}`;
@@ -426,25 +426,7 @@ function renderTempo() {
     mode = 'LIVE';
   }
   bpmValue.textContent = value;
-  barDuration.innerHTML = Number.isFinite(Number(value))
-    ? `<strong>${(240 / Number(value)).toFixed(2)} 秒</strong> / 小节`
-    : '<strong>自由演奏</strong> / 等待检测';
   tempoState.textContent = mode;
-}
-
-function renderTempoCandidates() {
-  tempoCandidates.replaceChildren();
-  if (!tempoDetection || !['candidates', 'syncing'].includes(tempoPhase)) return;
-  tempoDetection.candidates.forEach((candidate) => {
-    const button = document.createElement('button');
-    button.className = `tempo-chip${candidate.bpm === selectedBpm ? ' selected' : ''}`;
-    button.type = 'button';
-    button.textContent = `${candidate.bpm}${candidate.recommended ? '·R' : ''}`;
-    button.title = `${candidate.acceptedCount} 次落入首小节，${candidate.ignoredCount} 次超出`;
-    button.disabled = controlsLocked() || state.running || tempoPhase === 'syncing';
-    button.addEventListener('click', () => { void selectTempoCandidate(candidate.bpm); });
-    tempoCandidates.append(button);
-  });
 }
 
 function refreshControlAvailability() {
@@ -477,14 +459,12 @@ function refreshControlAvailability() {
   explainPattern.disabled = explanationLoading || locked || !hasPattern() || Boolean(
     serialPort && !patternRevisions.isSynced,
   );
-  patternName.disabled = locked;
   generatePattern.disabled = (
     aiController?.phase === 'generating'
     || aiController?.phase === 'applying'
     || recordingLocksControls()
     || explanationLoading
   );
-  renderTempoCandidates();
 }
 
 function setProtocolFeatures(
@@ -660,13 +640,13 @@ async function syncPattern({ throwOnError = false } = {}) {
     await transmitPattern(snapshot);
     if (patternQueued) {
       patternInFlight = false;
-      tempoPhase = tempoDetection ? 'candidates' : 'manual';
+      tempoPhase = tempoDetection ? 'detected' : 'manual';
       refreshControlAvailability();
       void syncPattern();
     } else {
       patternInFlight = false;
       patternDirty = patternRevisions.currentRevision !== snapshot.revision;
-      tempoPhase = tempoDetection ? 'candidates' : 'manual';
+      tempoPhase = tempoDetection ? 'detected' : 'manual';
       commitBpm = null;
       refreshControlAvailability();
       renderTempo();
@@ -680,7 +660,7 @@ async function syncPattern({ throwOnError = false } = {}) {
   } catch (error) {
     patternInFlight = false;
     patternQueued = patternDirty;
-    tempoPhase = tempoDetection ? 'candidates' : 'manual';
+    tempoPhase = tempoDetection ? 'detected' : 'manual';
     commitBpm = null;
     renderTempo();
     refreshControlAvailability();
@@ -813,7 +793,7 @@ async function processRecordingStop(stop) {
     });
     detectedBpm = tempoDetection.recommendedBpm;
     selectedBpm = detectedBpm;
-    tempoPhase = 'candidates';
+    tempoPhase = 'detected';
     const result = quantizePadEvents(recordedEventSnapshot, selectedBpm);
     traceRecording('pattern_quantized', {
       bpm: selectedBpm,
@@ -835,16 +815,10 @@ async function processRecordingStop(stop) {
     });
     patternApproximateQuantization = true;
     setPattern(result.masks, false, 'hardware_recording');
-    const ignoredSuffix = result.ignoredCount > 0
-      ? ` · ${result.ignoredCount} 次超出首个小节未写入`
-      : '';
-    sequenceSource.textContent = `实体演奏 · 自动 Tempo ${selectedBpm} BPM${ignoredSuffix}`;
+    sequenceSource.textContent = `录制完成 · ${selectedBpm} BPM`;
     await syncPattern({ throwOnError: true });
     recordingPhase = 'draft';
-    const ambiguity = tempoDetection.status === 'ambiguous'
-      ? '存在半速/倍速歧义，可切换候选试听。'
-      : '可切换候选速度试听。';
-    recordStatus.textContent = `检测到约 ${selectedBpm} BPM，已写入 ${result.acceptedCount} 次敲击；${ambiguity}`;
+    recordStatus.textContent = `录制完成，已自动采用 ${selectedBpm} BPM。`;
     recordStatus.classList.remove('error');
     recordStatus.classList.add('success');
     renderTempo();
@@ -887,33 +861,12 @@ async function stopPadRecording() {
   }
 }
 
-async function selectTempoCandidate(bpm) {
-  if (!tempoDetection || patternInFlight || state.running) return;
-  const candidate = tempoDetection.candidates.find((item) => item.bpm === bpm);
-  if (!candidate) return;
-  selectedBpm = candidate.bpm;
-  patternApproximateQuantization = true;
-  const result = quantizePadEvents(recordedEventSnapshot, selectedBpm);
-  setPattern(result.masks, false, 'tempo_candidate');
-  sequenceSource.textContent = `实体演奏 · Tempo 候选 ${selectedBpm} BPM · ${result.acceptedCount} 次落入首小节`;
-  renderTempo();
-  renderTempoCandidates();
-  try {
-    await syncPattern({ throwOnError: true });
-    recordStatus.textContent = `已切换到 ${selectedBpm} BPM，并按原始事件重新量化。`;
-    recordStatus.classList.remove('error');
-    recordStatus.classList.add('success');
-  } catch (error) {
-    setRecordingError(error);
-  }
-}
-
 function saveCurrentPattern() {
   ensureRecordingTraceSession();
   traceRecording('pattern_save_requested', recordControlSnapshot());
   try {
     const serialized = serializeSavedPattern({
-      name: patternName.value,
+      name: DEFAULT_PATTERN_NAME,
       bpm: selectedBpm,
       masks: pattern,
       approximateQuantization: patternApproximateQuantization,
@@ -947,12 +900,11 @@ function restoreSavedPattern() {
     detectedBpm = null;
     tempoDetection = null;
     tempoPhase = 'manual';
-    patternName.value = saved.name;
     patternApproximateQuantization = saved.approximateQuantization;
     patternDirty = true;
     markPatternChanged('saved_restore');
     storageDirty = false;
-    sequenceSource.textContent = `已保存 · ${saved.name} · ${saved.bpm} BPM`;
+    sequenceSource.textContent = `已保存 · ${saved.bpm} BPM`;
     saveStatus.textContent = '已恢复浏览器中保存的 Pattern';
     saveStatus.classList.add('success');
   } catch (error) {
@@ -965,6 +917,7 @@ function renderExplanation(payload) {
   const explanation = payload.explanation;
   explanationResult.hidden = false;
   explanationStyle.textContent = explanation.closestStyle;
+  explanationOverview.textContent = explanation.styleOverview;
   explanationReasons.replaceChildren();
   explanation.reasons.forEach((item) => {
     const row = document.createElement('li');
@@ -992,14 +945,35 @@ function renderExplanation(payload) {
   );
 }
 
+function stopExplanationLoadingStatus() {
+  if (explanationLoadingTimer !== null) {
+    window.clearInterval(explanationLoadingTimer);
+    explanationLoadingTimer = null;
+  }
+  explanationLoadingStartedAt = null;
+  recordStatus.classList.remove('loading');
+}
+
+function startExplanationLoadingStatus() {
+  stopExplanationLoadingStatus();
+  explanationLoadingStartedAt = performance.now();
+  const update = () => {
+    const elapsedMs = performance.now() - explanationLoadingStartedAt;
+    recordStatus.textContent = `AI 正在分析你的鼓点… 已等待 ${formatSeconds(elapsedMs)}`;
+  };
+  recordStatus.classList.remove('error', 'success');
+  recordStatus.classList.add('loading');
+  update();
+  explanationLoadingTimer = window.setInterval(update, 100);
+}
+
 async function explainCurrentPattern() {
   const requestId = `explain-${++explanationRequestSequence}`;
   const request = patternRevisions.beginAiRequest(requestId);
   const sourceMasks = request.snapshot.masks;
   const sourceBpm = request.snapshot.bpm;
   explanationLoading = true;
-  recordStatus.textContent = '已读取六轨 16 步 Pattern，正在提取节奏结构并请求 AI 解释…';
-  recordStatus.classList.remove('error', 'success');
+  startExplanationLoadingStatus();
   refreshControlAvailability();
   try {
     const payload = await requestPatternExplanation(
@@ -1013,18 +987,21 @@ async function explainCurrentPattern() {
     explanationPayload = payload;
     explanationSourceRevision = request.sourceRevision;
     renderExplanation(payload);
-    const repaired = payload.repairAttempted ? ' · 首答校验失败后修复一次' : '';
+    stopExplanationLoadingStatus();
+    const elapsed = formatSeconds(payload.latencyMs?.total);
     recordStatus.textContent = resolution.stale
-      ? `AI 解释完成，但对应 v${request.sourceRevision}；当前已是 v${resolution.currentRevision}。`
-      : `AI 解释完成 · Pattern v${request.sourceRevision} · ${payload.latencyMs?.total ?? '—'} ms${repaired}`;
+      ? `AI 解释完成，用时 ${elapsed}；Pattern 已更新，这份解释对应修改前版本。`
+      : `AI 解释完成，用时 ${elapsed}`;
     recordStatus.classList.add('success');
   } catch (error) {
     const normalized = error instanceof PatternExplanationError
       ? error
       : new PatternExplanationError('client_error', '网页处理 AI 解释时发生错误。');
-    recordStatus.textContent = `AI 解释失败：${normalized.message}`;
+    stopExplanationLoadingStatus();
+    recordStatus.textContent = `AI 解释失败：${normalized.message} Pattern 和硬件播放不受影响，请重试。`;
     recordStatus.classList.add('error');
   } finally {
+    stopExplanationLoadingStatus();
     explanationLoading = false;
     refreshControlAvailability();
   }
@@ -1035,8 +1012,9 @@ function render(next) {
   state = { ...state, ...next };
   deviceBpm = Number(state.bpm) || deviceBpm;
   renderTempo();
-  toggle.textContent = state.running ? '停止' : '开始';
   toggle.classList.toggle('running', state.running);
+  toggle.setAttribute('aria-label', state.running ? '停止播放' : '开始播放');
+  toggle.title = state.running ? '停止播放' : '开始播放';
   toggle.setAttribute('aria-pressed', String(state.running));
   squares.forEach((square, index) => {
     const on = state.running && index === state.uiPosition;
@@ -1390,7 +1368,7 @@ function renderAiState(snapshot) {
     const firstPass = snapshot.metadata?.firstPass?.valid;
     const repaired = snapshot.metadata?.repairAttempted;
     const totalMs = snapshot.metadata?.latencyMs?.total;
-    aiPatternMeta.textContent = `${candidate.style} · ${candidate.bpm} BPM · ${totalMs ?? '—'} ms${repaired ? ' · 首答失败后已修复一次' : ''}`;
+    aiPatternMeta.textContent = `${candidate.style} · ${candidate.bpm} BPM · ${formatSeconds(totalMs)}${repaired ? ' · 首答失败后已修复一次' : ''}`;
     aiPatternNote.textContent = candidate.designNote || '六轨 16 步 Pattern 已通过结构与产品约束校验。';
     if (snapshot.phase === 'ready') {
       aiStatus.textContent = firstPass
@@ -1414,7 +1392,7 @@ function renderAiState(snapshot) {
     aiStatus.textContent = `生成失败：${snapshot.error?.message || '请重试。'}`;
     aiStatus.classList.add('error');
   } else {
-    aiStatus.textContent = '输入描述后生成，网页会再次校验六轨 16 步结构。';
+    aiStatus.textContent = '';
   }
   refreshControlAvailability();
 }
@@ -1443,7 +1421,6 @@ clearPattern.addEventListener('click', () => {
   tempoPhase = 'manual';
   setPattern([0, 0, 0, 0, 0, 0], true, 'manual_clear');
 });
-patternName.addEventListener('input', markPatternNameChanged);
 recordPattern.addEventListener('click', () => {
   if (recordingPhase === 'recording') void stopPadRecording();
   else void startPadRecording();

@@ -58,8 +58,9 @@ def explanation_request() -> dict[str, Any]:
 
 def valid_explanation() -> dict[str, Any]:
     return {
-        "schemaVersion": "easyinput.pattern.explanation.v2",
+        "schemaVersion": "easyinput.pattern.explanation.v3",
         "closestStyle": "Rock",
+        "styleOverview": "Rock 起源于二十世纪中期的美国流行文化，常见于摇滚歌曲、现场乐队和强调直接能量的流行音乐。",
         "reasons": [
             {
                 "track": "snare",
@@ -215,9 +216,9 @@ class LocalEnvironmentTests(unittest.TestCase):
 
 
 class PatternServiceApiTests(unittest.TestCase):
-    def test_explanation_v2_schema_documents_every_property(self) -> None:
+    def test_explanation_v3_schema_documents_every_property(self) -> None:
         schema = json.loads(EXPLANATION_SCHEMA_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(schema["$id"], "easyinput.pattern.explanation.v2")
+        self.assertEqual(schema["$id"], "easyinput.pattern.explanation.v3")
 
         def assert_property_descriptions(node: Any, path: str = "$") -> None:
             if not isinstance(node, dict):
@@ -389,7 +390,7 @@ class PatternServiceApiTests(unittest.TestCase):
         self.assertEqual(payload["features"]["snareBackbeatSteps"], [5, 13])
         self.assertTrue(payload["firstPass"]["valid"])
         self.assertEqual(adapter.calls, 1)
-        self.assertEqual(adapter.last_schema["$id"], "easyinput.pattern.explanation.v2")
+        self.assertEqual(adapter.last_schema["$id"], "easyinput.pattern.explanation.v3")
         system_prompt = adapter.last_messages[0]["content"]
         self.assertIn("鼓点编排初学者的智能学习助手", system_prompt)
         self.assertIn("不得声称读取了音频", system_prompt)
@@ -411,6 +412,7 @@ class PatternServiceApiTests(unittest.TestCase):
 
     def test_explain_repairs_english_user_visible_copy(self) -> None:
         english = json.loads(json.dumps(valid_explanation()))
+        english["styleOverview"] = "Rock began in the United States."
         english["reasons"][0]["reason"] = "The snare lands on the backbeat."
         english["styleLesson"]["title"] = "How is a rock groove arranged?"
         english["styleLesson"]["content"] = "Kick and snare form the groove."
@@ -430,15 +432,12 @@ class PatternServiceApiTests(unittest.TestCase):
         self.assertEqual(adapter.calls, 2)
         self.assertIn("怎么编排", payload["explanation"]["styleLesson"]["title"])
 
-    def test_explain_rejects_v1_contract_and_repairs_to_v2(self) -> None:
+    def test_explain_rejects_v2_contract_and_repairs_to_v3(self) -> None:
         old_contract = {
-            "schemaVersion": "easyinput.pattern.explanation.v1",
-            "summary": "这个 Pattern 更接近基础 Rock。",
-            "styleCandidates": [{"style": "Rock", "confidence": "high"}],
-            "evidence": [],
-            "suggestion": "移动一个底鼓落点。",
-            "limitations": "只依据单小节 Pattern。",
+            **valid_explanation(),
+            "schemaVersion": "easyinput.pattern.explanation.v2",
         }
+        old_contract.pop("styleOverview")
         adapter = SequenceAdapter(
             [json.dumps(old_contract), json.dumps(valid_explanation())]
         )
@@ -449,7 +448,7 @@ class PatternServiceApiTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertFalse(payload["firstPass"]["valid"])
         self.assertTrue(payload["repairAttempted"])
-        self.assertEqual(payload["explanation"]["schemaVersion"], "easyinput.pattern.explanation.v2")
+        self.assertEqual(payload["explanation"]["schemaVersion"], "easyinput.pattern.explanation.v3")
         self.assertEqual(adapter.calls, 2)
 
     def test_explain_rejects_empty_or_malformed_pattern(self) -> None:

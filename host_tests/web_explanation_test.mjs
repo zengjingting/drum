@@ -9,17 +9,24 @@ import {
 } from '../main/web/pattern-explanation.js';
 
 const indexHtml = readFileSync(new URL('../main/web/index.html', import.meta.url), 'utf8');
+const appSource = readFileSync(new URL('../main/web/app.js', import.meta.url), 'utf8');
 assert.match(indexHtml, /id="explanationStyle"/);
+assert.match(indexHtml, /id="explanationOverview"/);
 assert.match(indexHtml, /id="explanationReasons"/);
 assert.match(indexHtml, /id="explanationLessonContent"/);
 assert.match(indexHtml, /id="explanationSuggestions"/);
 assert.doesNotMatch(indexHtml, /explanationLimitations|置信度/);
+assert.match(appSource, /AI 正在分析你的鼓点… 已等待/);
+assert.match(appSource, /AI 解释完成，用时/);
+assert.match(appSource, /Pattern 和硬件播放不受影响/);
+assert.doesNotMatch(appSource, /AI 解释完成 · Pattern v/);
 
 const masks = [0x1111, 0x1010, 0x5555, 0, 0, 0];
 const pattern = buildExplanationPattern(masks, 120, true);
 const explanation = {
-  schemaVersion: 'easyinput.pattern.explanation.v2',
+  schemaVersion: 'easyinput.pattern.explanation.v3',
   closestStyle: 'Rock',
+  styleOverview: 'Rock 起源于二十世纪中期的美国流行文化，常见于摇滚歌曲和现场乐队。',
   reasons: [
     { track: 'snare', steps: [5, 13], reason: '军鼓形成第二、第四拍反拍。' },
   ],
@@ -48,13 +55,10 @@ badEvidence.reasons[0].steps = [2];
 assert.match(validateExplanation(badEvidence, pattern).join(' '), /未触发/);
 
 const oldExplanation = {
-  schemaVersion: 'easyinput.pattern.explanation.v1',
-  summary: '这个 Pattern 更接近基础 Rock。',
-  styleCandidates: [{ style: 'Rock', confidence: 'high' }],
-  evidence: [],
-  suggestion: '移动一个底鼓落点。',
-  limitations: '只依据单小节 Pattern。',
+  ...structuredClone(explanation),
+  schemaVersion: 'easyinput.pattern.explanation.v2',
 };
+delete oldExplanation.styleOverview;
 assert.match(validateExplanation(oldExplanation, pattern).join(' '), /字段集合|版本/);
 
 const englishLesson = structuredClone(explanation);

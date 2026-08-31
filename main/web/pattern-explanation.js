@@ -39,6 +39,7 @@ export function validateExplanation(explanation, pattern) {
   const required = [
     'schemaVersion',
     'closestStyle',
+    'styleOverview',
     'reasons',
     'styleLesson',
     'improvementSuggestions',
@@ -46,7 +47,7 @@ export function validateExplanation(explanation, pattern) {
   if (Object.keys(explanation).sort().join('|') !== [...required].sort().join('|')) {
     errors.push('解释字段集合不匹配。');
   }
-  if (explanation.schemaVersion !== 'easyinput.pattern.explanation.v2') {
+  if (explanation.schemaVersion !== 'easyinput.pattern.explanation.v3') {
     errors.push('解释 Schema 版本不匹配。');
   }
   if (
@@ -55,6 +56,14 @@ export function validateExplanation(explanation, pattern) {
     || explanation.closestStyle.length > 40
   ) {
     errors.push('最接近风格不合法。');
+  }
+  if (
+    typeof explanation.styleOverview !== 'string'
+    || !explanation.styleOverview.trim()
+    || explanation.styleOverview.length > 300
+    || !containsChinese(explanation.styleOverview)
+  ) {
+    errors.push('风格简介不合法。');
   }
 
   if (!Array.isArray(explanation.reasons) || explanation.reasons.length < 1 || explanation.reasons.length > 6) {

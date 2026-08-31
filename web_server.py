@@ -38,7 +38,7 @@ from eval.easyinput_eval.validation import (
 
 ROOT = Path(__file__).resolve().parent
 WEB_ROOT = ROOT / "main" / "web"
-EXPLANATION_SCHEMA_PATH = ROOT / "schemas" / "pattern-explanation-v2.schema.json"
+EXPLANATION_SCHEMA_PATH = ROOT / "schemas" / "pattern-explanation-v3.schema.json"
 LOCAL_ENV_PATH = ROOT / ".env.local"
 MAX_REQUEST_BYTES = 16 * 1024
 MODEL_ID = "deepseek-v4-flash"
@@ -354,10 +354,13 @@ def _build_explanation_messages(
         "请只依据提供的六轨、单小节、16 步 Pattern 和确定性节奏特征完成以下任务：\n"
         "1. 判断当前节奏最接近的一种鼓点风格。closestStyle 只填写风格名称；"
         "在原因中使用‘更接近’‘具有……倾向’等措辞，不得把单小节判断表述为完整歌曲的确定流派。\n"
-        "2. 使用用户当前 Pattern 中真实触发的音轨和 1-based 步数，解释为什么接近该风格。\n"
-        "3. 用鼓点初学者能够理解的 2 至 4 句简体中文，科普该风格常见的鼓组分工、典型落点和律动特点。\n"
-        "4. 给出 1 至 2 条当前六轨 16 步音序器能够实现的改进建议，并解释预期听感和对应的学习目标。\n\n"
+        "2. 用 styleOverview 的 1 至 2 句简体中文介绍该风格的起源、文化背景和常见歌曲场景，"
+        "不得在这里展开鼓点编排特点。\n"
+        "3. 使用用户当前 Pattern 中真实触发的音轨和 1-based 步数，解释为什么接近该风格。\n"
+        "4. 用鼓点初学者能够理解的 2 至 4 句简体中文，科普该风格常见的鼓组分工、典型落点和律动特点。\n"
+        "5. 给出 1 至 2 条当前六轨 16 步音序器能够实现的改进建议，并解释预期听感和对应的学习目标。\n\n"
         "必须严格区分：\n"
+        "- styleOverview 只回答这种风格是什么、从哪里来、常用于什么音乐；\n"
         "- reasons 描述用户当前 Pattern 实际具备的特征；\n"
         "- styleLesson 描述该风格通常具备的编排特征，不得暗示当前 Pattern 已经包含全部典型特征；\n"
         "- improvementSuggestions 描述用户接下来可以尝试的修改，不得写成当前 Pattern 已经存在的内容。\n\n"
@@ -389,13 +392,14 @@ def _validate_explanation(
     required = {
         "schemaVersion",
         "closestStyle",
+        "styleOverview",
         "reasons",
         "styleLesson",
         "improvementSuggestions",
     }
     if set(value) != required:
         errors.append({"path": "$", "message": "解释字段集合不匹配。"})
-    if value.get("schemaVersion") != "easyinput.pattern.explanation.v2":
+    if value.get("schemaVersion") != "easyinput.pattern.explanation.v3":
         errors.append({"path": "$.schemaVersion", "message": "Schema 版本不匹配。"})
     closest_style = value.get("closestStyle")
     if (
@@ -404,6 +408,16 @@ def _validate_explanation(
         or len(closest_style) > 40
     ):
         errors.append({"path": "$.closestStyle", "message": "最接近风格不合法。"})
+
+    style_overview = value.get("styleOverview")
+    if (
+        not isinstance(style_overview, str)
+        or not style_overview.strip()
+        or len(style_overview) > 300
+    ):
+        errors.append({"path": "$.styleOverview", "message": "风格简介不合法。"})
+    elif not CJK_TEXT_PATTERN.search(style_overview):
+        errors.append({"path": "$.styleOverview", "message": "风格简介必须使用简体中文。"})
 
     reasons = value.get("reasons")
     if not isinstance(reasons, list) or not 1 <= len(reasons) <= 6:
@@ -721,7 +735,7 @@ class MockDeepSeekAdapter(ProviderAdapter):
     ) -> ProviderResponse:
         del output_schema, settings
         is_explanation = any(
-            "easyinput.pattern.explanation.v2" in message.get("content", "")
+            "easyinput.pattern.explanation.v3" in message.get("content", "")
             for message in messages
         )
         pattern = {
@@ -763,8 +777,9 @@ class MockDeepSeekAdapter(ProviderAdapter):
                     evidence_steps = active[:4]
                     break
         explanation = {
-            "schemaVersion": "easyinput.pattern.explanation.v2",
+            "schemaVersion": "easyinput.pattern.explanation.v3",
             "closestStyle": "Rock",
+            "styleOverview": "Rock 起源于二十世纪中期的美国流行文化，常见于摇滚歌曲、现场乐队和强调直接能量的流行音乐。",
             "reasons": [
                 {
                     "track": evidence_track,

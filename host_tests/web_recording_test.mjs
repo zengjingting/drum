@@ -15,6 +15,11 @@ const appSource = readFileSync(new URL('../main/web/app.js', import.meta.url), '
 assert.match(indexHtml, /id="recordPattern"[^>]*>开始录制<\/button>/);
 assert.match(indexHtml, /id="savePattern"[^>]*>保存<\/button>/);
 assert.match(indexHtml, /id="explainPattern"[^>]*>AI 解释<\/button>/);
+assert.doesNotMatch(indexHtml, /id="tempoCandidates"|id="patternName"|DEEPSEEK V4 · READY/);
+assert.doesNotMatch(indexHtml, /S3 暂停使用|秒<\/strong> \/ 小节|01 \/ PATTERN|02 \/ GENERATE|03 \/ CAPTURE/);
+assert.match(indexHtml, /id="patternVersion"[^>]*>Pattern v0/);
+assert.match(indexHtml, /id="toggle"[^>]*aria-label="开始播放"/);
+assert.equal((indexHtml.match(/class="beat" aria-label="第 [1-4] 拍"/g) || []).length, 4);
 assert.match(appSource, /capabilities\.has\('padEvents'\)/);
 assert.match(appSource, /capabilities\.has\('hardwareCaptureButton'\)/);
 assert.match(appSource, /capabilities\.has\('revisionCommit'\)/);
@@ -63,8 +68,11 @@ assert.match(
 assert.match(
   appSource,
   /quantizePadEvents\(recordedEventSnapshot, selectedBpm\)/,
-  'candidate changes must re-quantize the original events',
+  'the recommended Tempo must quantize the immutable original events',
 );
+assert.doesNotMatch(appSource, /selectTempoCandidate|renderTempoCandidates/);
+assert.match(appSource, /tempoPhase = 'detected'/);
+assert.match(appSource, /sequenceSource\.textContent = `录制完成 · \$\{selectedBpm\} BPM`/);
 const padHandler = appSource.slice(
   appSource.indexOf("if (message.type === 'pad')"),
   appSource.indexOf("if (message.type === 'record')"),

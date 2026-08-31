@@ -59,7 +59,7 @@
     }
 
     main {
-      width: min(1480px, calc(100% - 48px));
+      width: min(1540px, calc(100% - 64px));
       height: 100dvh;
       margin: auto;
       padding: 18px 0;
@@ -74,7 +74,7 @@
       grid-template-columns: minmax(190px, auto) minmax(0, 1fr) auto;
       align-items: center;
       gap: 22px;
-      padding: 9px 11px 9px 14px;
+      padding: 8px 14px;
       border: 1px solid var(--line-strong);
       border-top-color: rgba(255, 112, 67, .72);
       border-radius: 10px;
@@ -82,7 +82,8 @@
       box-shadow: 0 12px 34px rgba(0,0,0,.30), inset 0 1px rgba(255,255,255,.035);
     }
 
-    .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+    .brand { display: flex; align-items: center; align-self: stretch; gap: 11px; min-width: 0; }
+    .brand > div { display: grid; align-content: center; gap: 3px; }
     .brand-mark {
       width: 36px;
       height: 36px;
@@ -102,13 +103,13 @@
     .brand-mark i:nth-child(2) { height: 100%; background: var(--accent); }
     .brand-mark i:nth-child(3) { height: 68%; }
     .eyebrow {
-      margin: 0 0 4px;
+      margin: 0;
       color: var(--cool);
       font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
       letter-spacing: .18em;
       text-transform: uppercase;
     }
-    h1 { margin: 0; font-size: 17px; line-height: 1; letter-spacing: -.025em; white-space: nowrap; }
+    h1 { margin: 0; font-size: 17px; line-height: 1.15; letter-spacing: -.025em; white-space: nowrap; }
 
     .transport {
       min-width: 0;
@@ -118,17 +119,13 @@
       gap: 14px;
     }
     .tempo-panel { display: flex; align-items: center; gap: 9px; }
-    .tempo-main { display: grid; gap: 3px; }
+    .tempo-main { display: grid; align-content: center; gap: 4px; }
     .tempo-label { margin: 0; color: var(--muted); font: 700 8px/1 ui-monospace, monospace; letter-spacing: .14em; }
     .tempo-readout { display: flex; align-items: baseline; gap: 6px; }
     #bpmValue { font-size: 31px; font-weight: 760; line-height: .8; letter-spacing: -.06em; font-variant-numeric: tabular-nums; }
     .unit { color: var(--muted); font: 700 9px/1 ui-monospace, monospace; letter-spacing: .10em; }
     .tempo-buttons { display: grid; grid-template-columns: repeat(2, 26px); gap: 4px; }
-    .tempo-state { min-height: 9px; margin: 0; color: var(--muted); font: 700 7px/1 ui-monospace, monospace; letter-spacing: .08em; }
-    .tempo-candidates { display: flex; gap: 3px; min-height: 20px; align-items: center; }
-    .tempo-chip { min-width: 31px; height: 20px; padding: 0 5px; border: 1px solid #344144; border-radius: 4px; color: #9ba5a5; background: #0b0f11; font: 700 8px/1 ui-monospace, monospace; cursor: pointer; }
-    .tempo-chip.selected { color: #07100f; border-color: var(--cool); background: var(--cool); }
-    .tempo-chip:disabled { cursor: not-allowed; opacity: .42; }
+    .tempo-state { min-height: 9px; margin: 0; color: var(--cool); font: 700 8px/1 ui-monospace, monospace; letter-spacing: .06em; }
     .icon-button {
       width: 26px;
       height: 26px;
@@ -144,35 +141,36 @@
     .transport-divider { width: 1px; height: 30px; background: var(--line); }
     .play-panel { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .primary {
-      min-width: 64px;
-      height: 38px;
-      padding: 0 15px;
+      width: 42px;
+      min-width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      padding: 0;
       border: 1px solid rgba(255, 112, 67, .72);
-      border-radius: 6px;
+      border-radius: 50%;
       color: #fff;
       background: linear-gradient(135deg, #ff7043, #db4f31);
       box-shadow: 0 0 20px rgba(255, 112, 67, .16);
-      font-size: 12px;
-      font-weight: 800;
       cursor: pointer;
     }
+    .play-icon { width: 0; height: 0; margin-left: 3px; border-top: 7px solid transparent; border-bottom: 7px solid transparent; border-left: 11px solid currentColor; }
+    .stop-icon { display: none; width: 12px; height: 12px; border-radius: 2px; background: currentColor; }
     .primary.running { color: #07100f; border-color: var(--cool); background: var(--cool); box-shadow: 0 0 24px rgba(113,224,212,.24); }
-    .beat-strip { width: min(260px, 20vw); display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+    .primary.running .play-icon { display: none; }
+    .primary.running .stop-icon { display: block; }
+    .beat-strip { display: grid; grid-template-columns: repeat(4, 14px); gap: 10px; align-items: center; }
     .beat {
-      height: 29px;
+      width: 14px;
+      height: 14px;
       position: relative;
-      display: grid;
-      place-items: center;
       border: 1px solid #263033;
-      border-radius: 4px;
-      color: #566163;
+      border-radius: 50%;
       background: #0b0f11;
-      font: 700 9px/1 ui-monospace, monospace;
       transition: 70ms ease;
     }
-    .beat::before { content: ""; position: absolute; top: 0; left: 20%; right: 20%; height: 1px; background: currentColor; opacity: .45; }
-    .beat.active { color: var(--cool); border-color: rgba(113, 224, 212, .58); background: var(--cool-soft); box-shadow: 0 0 13px rgba(113,224,212,.12); }
-    .beat.accent { color: var(--accent); border-color: rgba(255, 112, 67, .65); background: var(--accent-soft); }
+    .beat.active { border-color: var(--cool); background: var(--cool); box-shadow: 0 0 0 4px rgba(113,224,212,.10), 0 0 15px rgba(113,224,212,.42); transform: scale(1.08); }
+    .beat.accent { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 4px rgba(255,112,67,.10), 0 0 15px rgba(255,112,67,.42); }
 
     .connection {
       display: flex;
@@ -196,7 +194,7 @@
     .workspace {
       min-height: 0;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(320px, 360px);
+      grid-template-columns: minmax(720px, 3fr) minmax(420px, 2fr);
       gap: 14px;
     }
 
@@ -237,9 +235,6 @@
     }
     .section-heading h2 { margin: 0 0 4px; font-size: 14px; letter-spacing: -.01em; }
     .section-heading p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.35; }
-    .module-code { color: var(--accent); font: 700 9px/1 ui-monospace, monospace; letter-spacing: .15em; }
-    .assistant-panel .module-code { color: var(--cool); }
-
     .utility { display: flex; align-items: center; gap: 7px; }
     .text-button {
       min-height: 30px;
@@ -266,8 +261,8 @@
       width: 100%;
       min-width: 690px;
       display: grid;
-      grid-template-columns: 116px repeat(16, minmax(24px, 1fr));
-      gap: 5px;
+      grid-template-columns: 124px repeat(16, minmax(25px, 1fr));
+      gap: 4px;
       align-items: center;
     }
     .corner-label, .step-number { color: #526064; font: 700 8px/1 ui-monospace, monospace; text-align: center; }
@@ -286,8 +281,8 @@
     .track-dot { width: 6px; height: 22px; flex: 0 0 auto; border-radius: 2px; background: var(--pad); box-shadow: 0 0 12px color-mix(in srgb,var(--pad) 42%,transparent); }
     .step {
       width: 100%;
-      aspect-ratio: 1.18;
-      min-height: 27px;
+      aspect-ratio: 1;
+      min-height: 25px;
       padding: 0;
       border: 1px solid #273033;
       border-radius: 4px;
@@ -313,7 +308,6 @@
     }
     .pads-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
     .pads-head h2 { margin: 0; color: #aeb6b5; font-size: 10px; letter-spacing: .10em; text-transform: uppercase; }
-    .pads-head p { margin: 0; color: #5f6b6d; font-size: 9px; }
     .pad-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 7px; }
     .pad-card {
       --pad: var(--cool);
@@ -352,7 +346,7 @@
     .assistant-head {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: flex-start;
       gap: 12px;
       padding: 15px 16px 12px;
       border-bottom: 1px solid var(--line);
@@ -361,8 +355,7 @@
     .assistant-title { display: flex; align-items: center; gap: 9px; }
     .assistant-orb { width: 9px; height: 9px; border: 1px solid var(--cool); border-radius: 50%; box-shadow: 0 0 12px var(--cool), inset 0 0 5px var(--cool); }
     .assistant-title h2 { margin: 0; font-size: 12px; letter-spacing: .08em; }
-    .assistant-state { color: var(--muted); font: 700 8px/1 ui-monospace, monospace; letter-spacing: .12em; }
-    .assistant-section { padding: 15px 16px; }
+    .assistant-section { padding: 14px 16px; }
     .assistant-section + .assistant-section { border-top: 1px solid var(--line); }
     .assistant-section .section-heading { align-items: flex-start; margin-bottom: 10px; }
     .ai-panel, .recording-panel { margin: 0; }
@@ -400,43 +393,38 @@
     .icon-button:disabled, .primary:disabled, .ai-action:disabled, .text-button:disabled, .step:disabled, .pad-card:disabled { cursor: not-allowed; opacity: .36; }
     .step:disabled:hover { transform: none; border-color: #273033; }
 
-    .ai-status { min-height: 15px; margin: 8px 0 0; color: var(--muted); font-size: 9px; line-height: 1.45; }
+    .ai-status { min-height: 18px; margin: 8px 0 0; color: #9eaaa9; font-size: 11px; line-height: 1.5; }
     .ai-status.error { color: var(--danger); }
     .ai-status.success { color: var(--cool); }
+    .ai-status.loading { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border: 1px solid rgba(113,224,212,.28); border-radius: 6px; color: var(--cool); background: var(--cool-soft); font-weight: 700; }
+    .ai-status.loading::before { content: ""; width: 12px; height: 12px; flex: 0 0 auto; border: 2px solid rgba(113,224,212,.25); border-top-color: var(--cool); border-radius: 50%; animation: spin 700ms linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
     .ai-result { margin-top: 11px; padding: 10px 0 0 11px; border-top: 1px solid var(--line); border-left: 2px solid var(--cool); }
     .ai-result-head { display: grid; gap: 9px; }
-    .ai-result-title { margin: 0; font-size: 12px; }
-    .ai-result-meta, .ai-note { margin: 4px 0 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+    .ai-result-title { margin: 0; font-size: 13px; }
+    .ai-result-meta, .ai-note { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
     .ai-result .ai-action { justify-self: start; min-width: 74px; }
 
     .record-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
-    .pattern-name {
-      grid-column: 1 / -1;
-      min-height: 36px;
-      padding: 0 11px;
-      border: 1px solid #334043;
-      border-radius: 5px;
-      color: var(--ink);
-      background: #090d0f;
-      font-size: 11px;
-    }
     .record-button { grid-column: 1 / -1; }
     .record-button.recording { color: white; border-color: var(--accent); background: linear-gradient(135deg, #ff7043, #d94e31); box-shadow: 0 0 20px rgba(255,112,67,.18); }
     .record-status-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
     .record-status-row .ai-status:last-child { text-align: right; }
 
     .explanation-result { margin-top: 10px; padding: 11px; border: 1px solid #2f3b3d; border-radius: 6px; background: #0a0e10; }
-    .explanation-label { margin: 0 0 4px; color: #748182; font-size: 8px; letter-spacing: .12em; text-transform: uppercase; }
-    .explanation-style { margin: 0; color: var(--cool); font-family: "IBM Plex Mono", monospace; font-size: 18px; line-height: 1.2; }
-    .explanation-block { margin-top: 11px; padding-top: 10px; border-top: 1px solid #252e30; }
-    .explanation-block h4 { margin: 0 0 6px; color: #e2e7e5; font-size: 10px; font-weight: 600; }
-    .explanation-block p { margin: 0; color: #aab4b3; font-size: 9px; line-height: 1.6; }
-    .evidence-list { margin: 0; padding-left: 17px; color: #bcc5c4; font-size: 9px; line-height: 1.55; }
+    .explanation-label { margin: 0 0 5px; color: #82908f; font-size: 9px; letter-spacing: .10em; text-transform: uppercase; }
+    .explanation-style { margin: 0; color: var(--cool); font-family: "IBM Plex Mono", monospace; font-size: 22px; line-height: 1.2; }
+    .explanation-overview { margin: 7px 0 0; color: #c5cecd; font-size: 12px; line-height: 1.6; }
+    .explanation-block { margin-top: 13px; padding-top: 12px; border-top: 1px solid #252e30; }
+    .explanation-block h4 { margin: 0 0 7px; color: #eef2f0; font-size: 12px; font-weight: 650; }
+    .explanation-block p { margin: 0; color: #b7c0bf; font-size: 12px; line-height: 1.62; }
+    .evidence-list { margin: 0; padding-left: 19px; color: #c8d0cf; font-size: 12px; line-height: 1.6; }
     .suggestion-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
     .suggestion-list li { display: grid; gap: 3px; padding: 8px; border-left: 2px solid var(--accent); background: #101517; }
-    .suggestion-list strong { color: #dfe5e3; font-size: 9px; font-weight: 600; line-height: 1.45; }
-    .suggestion-list span { color: #8f9a99; font-size: 8px; line-height: 1.45; }
-    .explanation-stale { margin: 8px 0 0; color: var(--accent); font-size: 9px; }
+    .suggestion-list strong { color: #e7ecea; font-size: 12px; font-weight: 650; line-height: 1.5; }
+    .suggestion-list span { color: #a3aead; font-size: 11px; line-height: 1.5; }
+    .explanation-stale { margin: 9px 0 0; color: var(--accent); font-size: 11px; }
+    .pattern-version { color: var(--cool); font: 700 9px/1 ui-monospace, monospace; white-space: nowrap; }
 
     @media (max-width: 1080px) {
       body { overflow: auto; }
@@ -456,7 +444,7 @@
       .connection span:last-child { max-width: 82px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
       .transport { flex-wrap: wrap; gap: 9px; }
       .transport-divider { display: none; }
-      .beat-strip { width: 100%; order: 3; }
+      .beat-strip { order: 3; }
       .workspace { gap: 9px; }
       .instrument-panel { min-height: 590px; padding: 14px 10px 12px; }
       .section-heading { align-items: flex-start; }
@@ -468,6 +456,7 @@
 
     @media (prefers-reduced-motion: reduce) {
       .beat, .pad-card, .step { transition: none; }
+      .ai-status.loading::before { animation: none; }
     }
   </style>
 </head>
@@ -481,13 +470,13 @@
 
       <div class="transport" aria-label="速度与播放控制">
         <div class="tempo-panel">
-          <div class="tempo-main"><p class="tempo-label">TEMPO</p><div class="tempo-readout"><span id="bpmValue">120</span><span class="unit">BPM</span></div><p class="tempo-state" id="tempoState">MANUAL</p><div class="tempo-candidates" id="tempoCandidates" aria-label="检测到的速度候选"></div></div>
+          <div class="tempo-main"><p class="tempo-label">TEMPO</p><div class="tempo-readout"><span id="bpmValue">120</span><span class="unit">BPM</span></div><p class="tempo-state" id="tempoState">MANUAL</p></div>
           <div class="tempo-buttons"><button class="icon-button" id="slower" type="button" aria-label="速度减一" disabled>−</button><button class="icon-button" id="faster" type="button" aria-label="速度加一" disabled>＋</button></div>
         </div>
         <span class="transport-divider" aria-hidden="true"></span>
         <div class="play-panel">
-          <button class="primary" id="toggle" type="button" disabled>开始</button>
-          <div class="beat-strip" aria-label="四拍显示"><div class="beat"><span>01</span></div><div class="beat"><span>02</span></div><div class="beat"><span>03</span></div><div class="beat"><span>04</span></div></div>
+          <button class="primary" id="toggle" type="button" aria-label="开始播放" aria-pressed="false" disabled><span class="play-icon" aria-hidden="true"></span><span class="stop-icon" aria-hidden="true"></span></button>
+          <div class="beat-strip" aria-label="四拍显示"><div class="beat" aria-label="第 1 拍"></div><div class="beat" aria-label="第 2 拍"></div><div class="beat" aria-label="第 3 拍"></div><div class="beat" aria-label="第 4 拍"></div></div>
         </div>
       </div>
 
@@ -497,39 +486,37 @@
     <div class="workspace">
       <section class="instrument-panel" aria-labelledby="sequenceTitle">
         <div class="section-heading">
-          <div><span class="module-code">01 / PATTERN</span><h2 id="sequenceTitle">16 步音序器</h2><p id="sequenceSource">每格为 1/16 音符 · 四步一拍 · 自动跟随当前 BPM</p></div>
-          <div class="utility"><button class="text-button" id="clearPattern" type="button">清空 Pattern</button></div>
+          <div><h2 id="sequenceTitle">16 步音序器</h2><p id="sequenceSource">每格为 1/16 音符 · 四步一拍 · 自动跟随当前 BPM</p></div>
+          <div class="utility"><span class="pattern-version" id="patternVersion">Pattern v0</span><button class="text-button" id="clearPattern" type="button">清空 Pattern</button></div>
         </div>
 
         <div class="sequence-scroll"><div class="sequence-grid" id="sequenceGrid"></div></div>
 
         <section class="pads" aria-labelledby="padsTitle">
-          <div class="pads-head"><h2 id="padsTitle">Hardware Pad Monitor</h2><p>S3 暂停使用 · Closed Hi-Hat 已迁移至 S7</p></div>
+          <div class="pads-head"><h2 id="padsTitle">Hardware Pad Monitor</h2></div>
           <div class="pad-grid" id="padGrid"></div>
         </section>
 
-        <div class="sequence-footer"><span class="sequence-status" id="patternStatus" aria-live="polite">连接设备后同步</span><span id="barDuration"><strong>2.00 秒</strong> / 小节</span></div>
+        <div class="sequence-footer"><span class="sequence-status" id="patternStatus" aria-live="polite">连接设备后同步</span></div>
       </section>
 
       <aside class="assistant-panel" aria-label="AI 创作、录制与解释">
         <div class="assistant-head">
           <div class="assistant-title"><span class="assistant-orb" aria-hidden="true"></span><h2>AI COPILOT</h2></div>
-          <span class="assistant-state">DEEPSEEK V4 · READY</span>
         </div>
 
         <section class="assistant-section ai-panel" aria-labelledby="aiTitle">
-          <div class="section-heading"><div><span class="module-code">02 / GENERATE</span><h2 id="aiTitle">用一句话编写鼓点</h2><p>生成候选后，点击“应用”写入左侧主音序器</p></div></div>
+          <div class="section-heading"><div><h2 id="aiTitle">用一句话编写鼓点</h2><p>生成候选后，点击“应用”写入左侧主音序器</p></div></div>
           <div class="ai-compose"><textarea id="aiPrompt" maxlength="500" placeholder="例如：给我一个 92 BPM、松弛一点的 Boom Bap，底鼓不要太密，第二和第四拍有军鼓。"></textarea><button class="ai-action" id="generatePattern" type="button">生成鼓点</button></div>
-          <p class="ai-status" id="aiStatus" aria-live="polite">输入描述后生成，系统会校验六轨 16 步结构。</p>
+          <p class="ai-status" id="aiStatus" aria-live="polite"></p>
           <div class="ai-result" id="aiResult" hidden>
             <div class="ai-result-head"><div><h3 class="ai-result-title" id="aiPatternTitle"></h3><p class="ai-result-meta" id="aiPatternMeta"></p><p class="ai-note" id="aiPatternNote"></p></div><button class="ai-action secondary" id="applyAiPattern" type="button" disabled>应用</button></div>
           </div>
         </section>
 
         <section class="assistant-section recording-panel" aria-labelledby="recordingTitle">
-          <div class="section-heading"><div><span class="module-code">03 / CAPTURE</span><h2 id="recordingTitle">录制实体演奏</h2><p>停止后近似量化到左侧音序器，再由 AI 解释</p></div></div>
+          <div class="section-heading"><div><h2 id="recordingTitle">录制实体演奏</h2><p>停止后近似量化到左侧音序器，再由 AI 解释</p></div></div>
           <div class="record-actions">
-            <input class="pattern-name" id="patternName" maxlength="80" value="我的鼓点" aria-label="Pattern 名称">
             <button class="ai-action record-button" id="recordPattern" type="button" disabled>开始录制</button>
             <button class="ai-action secondary" id="savePattern" type="button" disabled>保存</button>
             <button class="ai-action secondary" id="explainPattern" type="button" disabled>AI 解释</button>
@@ -538,6 +525,7 @@
           <div class="explanation-result" id="explanationResult" hidden>
             <p class="explanation-label">最接近的风格</p>
             <h3 class="explanation-style" id="explanationStyle"></h3>
+            <p class="explanation-overview" id="explanationOverview"></p>
             <section class="explanation-block" aria-labelledby="explanationReasonsTitle">
               <h4 id="explanationReasonsTitle">为什么这样判断</h4>
               <ol class="evidence-list" id="explanationReasons"></ol>
